@@ -5,7 +5,7 @@ const C=window.MTCore;
 if(!C){document.body.textContent='Thiếu file core.js. Hãy giải nén toàn bộ ZIP trước khi mở index.html.';return;}
 const STEPS=[
   ['Thiết bị & bảo mật','Chọn model, DNS, thời gian và bảo mật ban đầu.','01'],
-  ['Đường Internet (WAN)','Khai báo PPPoE / DHCP / Static IP, tài khoản và cấu hình các đường mạng.','02'],
+  ['Đường Internet (WAN)','Xác nhận PPPoE trực tiếp hay VLAN 802.1Q theo nhà mạng; khai báo tài khoản và tốc độ WAN.','02'],
   ['Mạng LAN & DHCP','Tạo Bridge LAN, IP quản trị và DHCP Server.','03'],
   ['VLAN & phân cổng','Tạo VLAN trunk/access hoặc bỏ qua nếu không cần.','04'],
   ['PPPoE Server','Tạo máy chủ PPPoE, gói cước và danh sách tài khoản.','05'],
@@ -26,7 +26,7 @@ function toggle(label,path,hint=''){return `<label class="checkrow"><input type=
 function hSection(title,sub){return `<h2 class="section-title">${title}</h2><p class="section-sub">${sub}</p>`;}
 function wanPage(){
  const wanCount=s.wan.length, all=C.ports(s);
- let html=hSection('Kết nối Internet','WAN mặc định bắt đầu từ ether1. Mỗi WAN có thể chọn PPPoE, DHCP hoặc IP tĩnh.');
+ let html=hSection('Kết nối Internet','WAN mặc định bắt đầu từ ether1. Với PPPoE, hãy xác nhận nhà mạng yêu cầu quay trực tiếp hay gắn thẻ VLAN 802.1Q.');
  html+=`<div class="form-grid"><div class="field"><label for="wanCount">Số lượng đường WAN</label><select id="wanCount">${[1,2,3,4].map(x=>`<option value="${x}" ${wanCount===x?'selected':''}>${x} WAN</option>`).join('')}</select><span class="hint">Các cổng WAN được loại khỏi Bridge LAN.</span></div><div class="callout">${wanCount>1?'Đã bật chế độ PCC + Failover (tự tạo routes và mangle).':'Một WAN sẽ sử dụng default route đơn giản, không sinh PCC.'}</div></div><hr class="rule">`;
  s.wan.forEach((w,i)=>{
   html+=`<div class="wan-card"><div class="card-head"><strong>🌐 WAN ${i+1} <span class="badge-lite">${esc(w.type.toUpperCase())}</span></strong><small>${i===0?'WAN chính':'WAN dự phòng / cân bằng tải'}</small></div><div class="form-grid triple">`;
@@ -35,6 +35,11 @@ function wanPage(){
   html+=select('Kiểu kết nối',`wan.${i}.type`,[['pppoe','PPPoE Client'],['dhcp','DHCP Client'],['static','Static IP']]);
   html+='</div><div class="form-grid" style="margin-top:17px">';
   if(w.type==='pppoe'){
+    html+=`<div class="field" style="grid-column:1/-1"><label>Hình thức quay PPPoE * — cần hỏi nhà mạng trước</label>
+       ${select('Kết nối PPPoE của WAN '+(i+1),`wan.${i}.pppoeMode`,[['unknown','-- Chưa xác nhận với nhà mạng --'],['direct','PPPoE trực tiếp (untagged) trên '+w.port],['tagged','PPPoE qua VLAN 802.1Q (tagged)']])}
+       <span class="hint">Đây là VLAN WAN của nhà mạng, KHÔNG phải VLAN LAN ở bước 4. Không suy đoán VLAN ID theo tên nhà mạng.</span></div>`;
+    if(w.pppoeMode==='tagged')html+=field('VLAN ID do nhà mạng cung cấp *',`wan.${i}.vlanId`,'Ví dụ: 35','Số nguyên 1–4094. Phần mềm tạo VLAN trước rồi gắn PPPoE Client lên VLAN đó.');
+    html+=`<label class="checkrow" style="align-self:end"><input type="checkbox" data-path="wan.${i}.ispConfirmed" ${w.ispConfirmed?'checked':''}><span><strong>Đã xác nhận với nhà mạng / kỹ thuật viên ONT *</strong><small>Đã kiểm tra hình thức quay PPPoE ${w.pppoeMode==='tagged'?'và VLAN ID đang nhập':w.pppoeMode==='direct'?'không cần tag VLAN':'(chưa chọn kiểu kết nối)'}; nếu đổi kiểu kết nối hoặc VLAN ID sẽ phải xác nhận lại.</small></span></label>`;
     html+=field('PPPoE Username *',`wan.${i}.user`,'Nhập tên tài khoản nhà mạng');
     html+=`<div class="field"><label for="pass-${i}">PPPoE Password *</label><div style="display:flex;gap:5px"><input id="pass-${i}" data-path="wan.${i}.password" type="password" autocomplete="off" value="${esc(w.password)}" placeholder="Nhập mật khẩu PPPoE"><button type="button" class="btn btn-outline btn-small" data-action="peek" data-input="pass-${i}" aria-label="Hiện hoặc ẩn mật khẩu">◉</button></div><span class="hint">Mật khẩu chỉ nằm trong bộ nhớ trình duyệt, trừ khi anh xuất script chứa mật khẩu.</span></div>`;
   }
@@ -212,11 +217,11 @@ function skipCurrent(){
 }
 function updateSummary(){
  const result=C.validate(s),a=result.alloc;const all=C.ports(s);const relevant=started && step<7 ? errorsForStage(step) : []; 
- el('summaryPanel').innerHTML=`<div class="summary-card"><div class="summary-heading"><span class="circle">▦</span> Tóm tắt cấu hình</div><div class="sum-item"><span class="sum-label">Dự án</span><span class="sum-val">${esc(s.meta.project)}</span></div><div class="sum-item"><span class="sum-label">Model</span><span class="sum-val">${esc(s.meta.model)}</span></div><div class="sum-item"><span class="sum-label">Cổng thiết bị</span><span class="sum-val">${all.length}</span></div><div class="line"></div><div class="sum-item"><span class="sum-label">WAN</span><span class="sum-val">${s.wan.length}</span></div>${s.wan.map((w,i)=>`<div class="sum-item"><span class="sum-label">↳ ${esc(w.port)}</span><span class="sum-val">${esc(w.label||'WAN'+(i+1))} / ${esc(w.type.toUpperCase())}</span></div>`).join('')}<div class="sum-item"><span class="sum-label">Cổng LAN</span><span class="sum-val">${a.lanPorts.length}</span></div><div class="sum-item"><span class="sum-label">Tỷ lệ PCC</span><span class="sum-val">${esc(C.computePcc(s.wan).weights.join(' : ')||'Chưa có')}</span></div><div class="sum-item"><span class="sum-label">Gateway LAN</span><span class="sum-val">${esc(s.lan.gateway)}</span></div><div class="sum-item"><span class="sum-label">VLAN</span><span class="sum-val">${s.vlans.length}</span></div><div class="sum-item"><span class="sum-label">PPPoE Server</span><span class="sum-val">${s.ppp.enabled?'Bật ('+C.parseUsers(s.ppp.usersText).users.length+' user)':'Tắt'}</span></div><div class="sum-item"><span class="sum-label">PCQ</span><span class="sum-val">${s.qos.enabled?'Bật':'Tắt'}</span></div><div class="line"></div><div class="summary-heading" style="font-size:12px">${relevant.length?'<span class="pill red">'+relevant.length+' lỗi bước này</span>':'<span class="pill green">Bước này hợp lệ</span>'}<span class="pill orange">${result.warnings.length} lưu ý</span></div>${relevant.slice(0,3).map(x=>`<div class="summary-error">• ${esc(x)}</div>`).join('')}${relevant.length>3?`<div class="smallnote" style="margin-top:8px">+ ${relevant.length-3} lỗi khác — xem chi tiết bên trái</div>`:''}</div><div class="summary-card"><div class="summary-heading">🔒 An toàn triển khai</div><p class="helper">RouterOS 7 · No Default Config. Tự kiểm tra lỗi xung đột IP/VLAN/port trước khi xuất. Không áp dụng trực tiếp lên thiết bị.</p><span class="pill green">100% xử lý tại máy</span></div>`;
+ el('summaryPanel').innerHTML=`<div class="summary-card"><div class="summary-heading"><span class="circle">▦</span> Tóm tắt cấu hình</div><div class="sum-item"><span class="sum-label">Dự án</span><span class="sum-val">${esc(s.meta.project)}</span></div><div class="sum-item"><span class="sum-label">Model</span><span class="sum-val">${esc(s.meta.model)}</span></div><div class="sum-item"><span class="sum-label">Cổng thiết bị</span><span class="sum-val">${all.length}</span></div><div class="line"></div><div class="sum-item"><span class="sum-label">WAN</span><span class="sum-val">${s.wan.length}</span></div>${s.wan.map((w,i)=>`<div class="sum-item"><span class="sum-label">↳ ${esc(w.port)}</span><span class="sum-val">${esc(w.label||'WAN'+(i+1))} / ${esc(w.type==='pppoe'?(w.pppoeMode==='tagged'?'PPPoE VLAN '+w.vlanId:w.pppoeMode==='direct'?'PPPoE trực tiếp':'PPPoE chưa xác nhận'):w.type.toUpperCase())}</span></div>`).join('')}<div class="sum-item"><span class="sum-label">Cổng LAN</span><span class="sum-val">${a.lanPorts.length}</span></div><div class="sum-item"><span class="sum-label">Tỷ lệ PCC</span><span class="sum-val">${esc(C.computePcc(s.wan).weights.join(' : ')||'Chưa có')}</span></div><div class="sum-item"><span class="sum-label">Gateway LAN</span><span class="sum-val">${esc(s.lan.gateway)}</span></div><div class="sum-item"><span class="sum-label">VLAN</span><span class="sum-val">${s.vlans.length}</span></div><div class="sum-item"><span class="sum-label">PPPoE Server</span><span class="sum-val">${s.ppp.enabled?'Bật ('+C.parseUsers(s.ppp.usersText).users.length+' user)':'Tắt'}</span></div><div class="sum-item"><span class="sum-label">PCQ</span><span class="sum-val">${s.qos.enabled?'Bật':'Tắt'}</span></div><div class="line"></div><div class="summary-heading" style="font-size:12px">${relevant.length?'<span class="pill red">'+relevant.length+' lỗi bước này</span>':'<span class="pill green">Bước này hợp lệ</span>'}<span class="pill orange">${result.warnings.length} lưu ý</span></div>${relevant.slice(0,3).map(x=>`<div class="summary-error">• ${esc(x)}</div>`).join('')}${relevant.length>3?`<div class="smallnote" style="margin-top:8px">+ ${relevant.length-3} lỗi khác — xem chi tiết bên trái</div>`:''}</div><div class="summary-card"><div class="summary-heading">🔒 An toàn triển khai</div><p class="helper">RouterOS 7 · No Default Config. Tự kiểm tra lỗi xung đột IP/VLAN/port trước khi xuất. Không áp dụng trực tiếp lên thiết bị.</p><span class="pill green">100% xử lý tại máy</span></div>`;
 }
 function addVlan(){const ids=s.vlans.map(v=>Number(v.id));let id=10;while(ids.includes(id))id+=10;copiedSteps.clear();s.vlans.push({id,name:'VLAN'+id,mode:'routed',gateway:'192.168.'+id+'.1/24',dhcp:true,poolStart:'',poolEnd:'',internet:true,trunkPorts:[],accessPorts:[]});renderStep();toast('Đã tạo VLAN '+id+'. Chọn cổng Trunk hoặc Access.');}
 function changeWanCount(n){const all=C.ports(s);if(n>all.length){toast('Không đủ cổng vật lý trên thiết bị.');return;}const old=s.wan;copiedSteps.clear();
- s.wan=Array.from({length:n},(_,i)=>old[i]||{label:'WAN'+(i+1),port:all[i]||'ether'+(i+1),type:'pppoe',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'});
+ s.wan=Array.from({length:n},(_,i)=>old[i]||{label:'WAN'+(i+1),port:all[i]||'ether'+(i+1),type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'});
  const used=new Set();s.wan.forEach((w,i)=>{if(!all.includes(w.port)||used.has(w.port))w.port=all.find(p=>!used.has(p))||w.port;used.add(w.port);});
  if(s.wan.some(w=>w.port===s.ppp.port))s.ppp.port=all.findLast(p=>!s.wan.some(w=>w.port===p))||'';
  s.lan.selectedPorts=(s.lan.selectedPorts||[]).filter(p=>!s.wan.some(w=>w.port===p));
@@ -273,6 +278,11 @@ function eventChange(e){const t=e.target;if(t.id==='wanCount')return changeWanCo
  if(t.dataset.path){const path=t.dataset.path;let val=t.type==='checkbox'?t.checked:t.value;
  if(path==='wan.0.weight'||/\.weight$/.test(path)||/\.id$/.test(path))val=Number(val);
  set(path,val);copiedSteps.clear();
+ // A changed ISP method requires fresh explicit confirmation. Never carry the old confirmation across.
+ if(/^wan\.\d+\.(pppoeMode|type|port)$/.test(path)){
+   const w=s.wan[Number(path.split('.')[1])];w.ispConfirmed=false;
+   if(path.endsWith('.pppoeMode')&&val!=='tagged')w.vlanId='';
+ }
  if(/^vlans\.\d+\.mode$/.test(path)){const v=s.vlans[Number(path.split('.')[1])];if(v.mode==='pppoe')v.dhcp=false;}
  if(path==='ppp.mode'&&val==='vlan'){const valid=s.vlans.filter(v=>v.mode==='pppoe');if(!valid.some(v=>String(v.id)===String(s.ppp.vlanId)))s.ppp.vlanId=valid.length?String(valid[0].id):'';}
  if(path==='meta.model'){const modelPorts=C.ports(s);const used=new Set();s.wan.forEach((w,i)=>{if(!modelPorts.includes(w.port)||used.has(w.port))w.port=modelPorts.find(p=>!used.has(p))||'';used.add(w.port);});if(!modelPorts.includes(s.ppp.port)||used.has(s.ppp.port))s.ppp.port=modelPorts.findLast(p=>!used.has(p))||'';s.vlans.forEach(v=>{v.trunkPorts=(v.trunkPorts||[]).filter(p=>modelPorts.includes(p));v.accessPorts=(v.accessPorts||[]).filter(p=>modelPorts.includes(p));});s.lan.selectedPorts=(s.lan.selectedPorts||[]).filter(p=>modelPorts.includes(p));s.ppp.ports=(s.ppp.ports||[]).filter(p=>modelPorts.includes(p));}
@@ -282,6 +292,12 @@ function eventChange(e){const t=e.target;if(t.id==='wanCount')return changeWanCo
 function eventInput(e){const t=e.target;if(t.dataset.path&&t.type!=='checkbox'&&t.tagName!=='SELECT'){
  let val=t.value;if(/\.weight$/.test(t.dataset.path)||/\.id$/.test(t.dataset.path))val=Number(val);
  set(t.dataset.path,val);copiedSteps.clear();
+ if(/^wan\.\d+\.vlanId$/.test(t.dataset.path)){
+   const i=Number(t.dataset.path.split('.')[1]);s.wan[i].ispConfirmed=false;
+   // Keep visible confirmation checkbox consistent with state as VLAN ID is edited.
+   const checkbox=el('stepContent').querySelector?.('[data-path="wan.'+i+'.ispConfirmed"]');
+   if(checkbox)checkbox.checked=false;
+ }
  // Avoid re-rendering form on keystrokes so password input, caret and IME remain stable.
  if(/^wan\.\d+\.(speed|label)$/.test(t.dataset.path))refreshPccPanel();
  updateSummary();

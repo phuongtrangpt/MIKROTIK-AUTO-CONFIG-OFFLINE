@@ -1,3 +1,9 @@
+v1.3.0 — 14/11/2026
+- WAN PPPoE: chọn trực tiếp / VLAN 802.1Q riêng từng WAN, yêu cầu xác nhận với ISP.
+- Nhập VLAN ID 1–4094; sinh VLAN WAN trước PPPoE Client, giữ PCC và NAT trên interface PPPoE.
+- Mẫu JSON cũ buộc chọn hình thức PPPoE và xác nhận lại để tránh mặc định sai.
+- Bổ sung kiểm thử VLAN WAN, validation và giao diện wizard.
+
 v1.2.0 — 14/11/2026
 - WAN: nhập tốc độ đăng ký (250M, 1G...), tự tính số phần PCC (tối đa 24 phần).
 - LAN: chọn tất cả hoặc tự chọn cổng đưa vào bridge-LAN; cổng không chọn giữ độc lập.

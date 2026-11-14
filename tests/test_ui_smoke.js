@@ -15,6 +15,8 @@ const ctx={window:{MTCore,confirm:()=>true,scrollTo(){}},document:{getElementByI
 vm.runInNewContext(fs.readFileSync(require.resolve('../app.js'),'utf8'),ctx,{timeout:1000});
 function action(which){el('stepContent').events.click({target:{closest(sel){if(sel==='[data-action]')return {dataset:{action:which}};return null;}}});}
 function fill(path,value){el('stepContent').events.input({target:{dataset:{path},value,tagName:'INPUT',type:'text'}});}
+function choose(path,value){el('stepContent').events.change({target:{dataset:{path},value,tagName:'SELECT',type:'select-one'}});}
+function check(path,checked){el('stepContent').events.change({target:{dataset:{path},checked,tagName:'INPUT',type:'checkbox'}});}
 const next=()=>el('nextStep').click();
 const skip=()=>el('skipStep').click();
 assert.match(el('stepContent').innerHTML,/Bắt đầu cấu hình/);
@@ -25,9 +27,14 @@ assert.match(el('stepContent').innerHTML,/Lệnh RouterOS — Bước 1/);
 assert.match(el('stepContent').innerHTML,/\/system identity/);
 next();
 assert.match(el('stepContent').innerHTML,/Kết nối Internet/);
+assert.match(el('stepContent').innerHTML,/Chưa xác nhận với nhà mạng/);
 fill('wan.0.user','fpt');fill('wan.0.password','abc');fill('wan.1.user','vnpt');fill('wan.1.password','xyz');
+// Tagged VLAN WAN1, direct PPPoE WAN2. Confirmation must be explicit for each line.
+choose('wan.0.pppoeMode','tagged');assert.match(el('stepContent').innerHTML,/VLAN ID do nhà mạng/);
+fill('wan.0.vlanId','35');check('wan.0.ispConfirmed',true);
+choose('wan.1.pppoeMode','direct');check('wan.1.ispConfirmed',true);
 next();
-assert.match(el('stepContent').innerHTML,/name=pppoe-WAN1/);
+assert.match(el('stepContent').innerHTML,/name=vlan-WAN1 interface=ether1 vlan-id=35/);assert.match(el('stepContent').innerHTML,/name=pppoe-WAN1 interface=vlan-WAN1/);
 assert.match(el('stepContent').innerHTML,/password=&quot;\*\*\*\*\*\*\*\*&quot;/);
 next();next();assert.match(el('stepContent').innerHTML,/\/interface bridge add/);
 next();assert.match(el('stepContent').innerHTML,/VLAN Trunk/);

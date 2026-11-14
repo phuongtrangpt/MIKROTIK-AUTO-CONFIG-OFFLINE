@@ -1,4 +1,4 @@
-MIKROTIK AUTO CONFIG STUDIO v1.2.0 — WINDOWS OFFLINE
+MIKROTIK AUTO CONFIG STUDIO v1.3.0 — WINDOWS OFFLINE
 RouterOS 7 | No Default Configuration | Next / Copy / Skip
 ==========================================================
 
@@ -37,3 +37,5 @@ LIEN HE DICH VU
 Cau hinh MikroTik theo yeu cau, trien khai he thong mang nha tro/cong ty.
 Dien thoai: 0963839369
 Facebook: https://www.facebook.com/leviethoaiphuong/
+
+WAN PPPoE VLAN 802.1Q (v1.3.0): Hoi ISP PPPoE truc tiep hay tagged, VLAN ID neu can. Phai check "Da xac nhan". Neu tagged, tool tu tao /interface vlan truoc PPPoE Client.

@@ -5,7 +5,7 @@
   root.MTCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
   const MODELS = {
     RB5009: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','sfp-sfpplus1'],
     RB4011: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','ether9','ether10','sfp-sfpplus1'],
@@ -22,8 +22,8 @@
       meta: { project: 'KhachHang-01', identity: 'MT-KHACHHANG', model: 'RB5009', customPorts: '', note: '' },
       system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, disableIPv6: true },
       wan: [
-        {label:'FPT',port:'ether1',type:'pppoe',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'},
-        {label:'VNPT',port:'ether2',type:'pppoe',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'}
+        {label:'FPT',port:'ether1',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'},
+        {label:'VNPT',port:'ether2',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'}
       ],
       lan: { portMode:'all', selectedPorts:[], gateway: '192.168.1.1/24', dhcp: true, poolStart: '',poolEnd:'',lease:'1d',interVlan:false },
       vlans: [],
@@ -156,7 +156,13 @@
       if(usedW.has(w.port))errors.push(label+': trùng cổng WAN '+w.port+'.');usedW.add(w.port);
       if(!validText(w.label,30)) errors.push(label+': tên nhà mạng không được trống.');
       if(!['pppoe','dhcp','static'].includes(w.type))errors.push(label+': loại kết nối không hợp lệ.');
-      if(w.type==='pppoe'&&(!validText(w.user,128)||!validText(w.password,128)))errors.push(label+': bắt buộc nhập username và password PPPoE.');
+      if(w.type==='pppoe') {
+        if(!validText(w.user,128)||!validText(w.password,128))errors.push(label+': bắt buộc nhập username và password PPPoE.');
+        if(!['direct','tagged'].includes(w.pppoeMode))errors.push(label+': phải xác định PPPoE quay trực tiếp hay qua VLAN theo thông tin nhà mạng.');
+        if(w.pppoeMode==='tagged' && (!/^\d+$/.test(String(w.vlanId??''))||!Number.isInteger(Number(w.vlanId))||Number(w.vlanId)<1||Number(w.vlanId)>4094))
+          errors.push(label+': VLAN ID phía nhà mạng phải là số từ 1 tới 4094.');
+        if(w.ispConfirmed!==true)errors.push(label+': cần xác nhận với nhà mạng về chế độ PPPoE và VLAN ID trước khi sinh lệnh.');
+      }
       if(w.type==='static') {const n=parseCIDR(w.ip);if(!n)errors.push(label+': IP tĩnh phải dạng 172.16.1.2/24.');else{allWanIPs.push({label,c:n});if(!networkContains(n,w.gateway))errors.push(label+': gateway IP phải thuộc subnet IP tĩnh (trừ cấu hình gateway đặc biệt).');}}
       if(parseSpeed(w.speed)===null) errors.push(label+': băng thông đăng ký phải dạng 250M, 1G hoặc 1000 Mbps (> 0).');
     });
@@ -258,7 +264,14 @@
     if(s.wan.length>1)wanInfo.forEach(x=>add(1,'/routing table add name='+x.table+' fib'));
     wanInfo.forEach(({w,i,ifname})=>{
       add(1,'# WAN '+(i+1)+' '+lineComment(w.label)+' on '+lineComment(w.port));
-      if(w.type==='pppoe')add(1,'/interface pppoe-client add name='+ifname+' interface='+w.port+' user='+q(w.user)+' password='+q(w.password)+' add-default-route=no use-peer-dns=no disabled=no');
+      if(w.type==='pppoe'){
+        // Tagged WAN VLAN belongs to the physical ISP port, not the LAN VLAN wizard.
+        // Create it immediately before binding the PPPoE Client to the VLAN interface.
+        const clientOn=w.pppoeMode==='tagged'?'vlan-WAN'+(i+1):w.port;
+        if(w.pppoeMode==='tagged')add(1,'/interface vlan add name='+clientOn+' interface='+w.port+' vlan-id='+Number(w.vlanId)+' disabled=no comment='+q('ISP tagged WAN'+(i+1)));
+        add(1,'/interface pppoe-client add name='+ifname+' interface='+clientOn+' user='+q(w.user)+' password='+q(w.password)+' add-default-route=no use-peer-dns=no disabled=no');
+        add(1,'# Kiem tra PPPoE WAN'+(i+1)+': /interface pppoe-client monitor '+ifname+' once');
+      }
       else if(w.type==='static')add(1,'/ip address add address='+w.ip+' interface='+w.port+' comment='+q('WAN'+(i+1)));
       add(1,'/interface list member add list=WAN interface='+ifname);
     });

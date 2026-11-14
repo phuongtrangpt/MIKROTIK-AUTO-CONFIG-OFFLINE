@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const C = require('../core.js');
 let n=0;
 function test(name,fn){try{fn();n++;console.log('PASS',name)}catch(e){console.error('FAIL',name);throw e;}}
-const filled=()=>{const s=C.defaultState();s.wan[0].user='fpt-001';s.wan[0].password='fptpass';s.wan[1].user='vnpt-002';s.wan[1].password='vnptpass';return s;};
+const filled=()=>{const s=C.defaultState();s.wan[0].user='fpt-001';s.wan[0].password='fptpass';s.wan[0].pppoeMode='direct';s.wan[0].ispConfirmed=true;s.wan[1].user='vnpt-002';s.wan[1].password='vnptpass';s.wan[1].pppoeMode='direct';s.wan[1].ispConfirmed=true;return s;};
 function ok(s){const v=C.validate(s);assert.deepEqual(v.errors,[],v.errors.join(' | '));const r=C.render(s);assert(r.script.length>800);return r.script;}
-test('default requires both PPPoE passwords',()=>assert.equal(C.validate(C.defaultState()).errors.filter(x=>x.includes('PPPoE')).length,2));
+test('default PPPoE requires credentials, connection mode and ISP confirmation',()=>{const errors=C.validate(C.defaultState()).errors;assert.equal(errors.filter(x=>x.includes('username và password')).length,2);assert.equal(errors.filter(x=>x.includes('trực tiếp hay qua VLAN')).length,2);assert.equal(errors.filter(x=>x.includes('xác nhận với nhà mạng')).length,2);});
 test('IPv4 and subnet pool',()=>{assert.equal(C.parseCIDR('192.168.1.1/24').subnet,'192.168.1.0/24');assert.equal(C.autoPool(C.parseCIDR('192.168.1.1/24')).start,'192.168.1.100');assert(!C.parseCIDR('192.168.1.256/24'));assert(!C.parseCIDR('192.168.1.1/31'));});
 test('dual PPPoE PCC routes, secure firewall, NAT',()=>{const str=ok(filled());assert.match(str,/name=pppoe-WAN1 interface=ether1/);assert.match(str,/name=pppoe-WAN2 interface=ether2/);assert.match(str,/both-addresses-and-ports:2\/1/);assert.match(str,/routing-table=rt_WAN1/);assert.match(str,/routing-table=rt_WAN2/);assert.match(str,/out-interface-list=WAN action=masquerade/);assert.match(str,/action=drop comment="Default deny forward"/);assert.match(str,/in-interface=bridge-LAN src-address=192.168.1.0\/24/);assert.doesNotMatch(str,/fasttrack-connection/);});
 test('special characters in PPP password escaped',()=>{const s=filled();s.wan[0].password='foo$bar"quote\\path';const str=ok(s);assert(str.includes('password="foo\\$bar\\"quote\\\\path"'));});
@@ -90,4 +90,57 @@ test('PPPoE Server dedicated multiport bridge, DHCP only on custom LAN',()=>{
  assert.match(output,/pppoe-server server add interface=bridge-PPPoE/);
  assert.doesNotMatch(output,/bridge=bridge-LAN interface=ether5/);
  s.lan.selectedPorts.push('ether5');assert(C.validate(s).errors.some(x=>x.includes('vừa được chọn')));
+});
+
+// v1.3.0 — ISP tagged PPPoE WAN is distinct from LAN VLAN features.
+test('tagged VLAN WAN created before PPPoE Client and PCC still targets PPPoE logical interface',()=>{
+ const s=filled();s.wan[0].pppoeMode='tagged';s.wan[0].vlanId='35';s.wan[0].ispConfirmed=true;
+ const stages=C.renderStages(s);assert.equal(C.validate(s).errors.length,0);
+ const wanStage=stages[1].script;
+ const vlan=wanStage.indexOf('/interface vlan add name=vlan-WAN1 interface=ether1 vlan-id=35');
+ const pppoe=wanStage.indexOf('/interface pppoe-client add name=pppoe-WAN1 interface=vlan-WAN1');
+ assert(vlan>=0&&pppoe>vlan,'VLAN must be created first');
+ assert.match(wanStage,/name=pppoe-WAN2 interface=ether2/);
+ assert.doesNotMatch(stages[3].script,/vlan-WAN1/);
+ assert.match(stages[5].script,/in-interface=pppoe-WAN1/);
+ assert.match(stages[5].script,/out-interface-list=WAN/);
+});
+test('two separate ISP WAN VLAN IDs and physically distinct WAN ports',()=>{
+ const s=filled();s.wan[0].pppoeMode='tagged';s.wan[0].vlanId=35;
+ s.wan[1].pppoeMode='tagged';s.wan[1].vlanId=35;
+ assert.equal(C.validate(s).errors.length,0, 'same VLAN ID is allowed on separate physical ports');
+ const wan=C.renderStages(s)[1].script;
+ assert.match(wan,/name=vlan-WAN1 interface=ether1 vlan-id=35/);
+ assert.match(wan,/name=vlan-WAN2 interface=ether2 vlan-id=35/);
+ assert.match(wan,/name=pppoe-WAN2 interface=vlan-WAN2/);
+});
+test('ISP mode unknown prevents generation even when credentials entered',()=>{
+ const s=filled();s.wan[0].pppoeMode='unknown';s.wan[0].ispConfirmed=false;
+ const v=C.validate(s);assert(v.errors.some(x=>x.includes('quay trực tiếp hay qua VLAN')));assert.equal(C.render(s).script,'');
+});
+test('ISP must be confirmed for direct PPPoE as well',()=>{
+ const s=filled();s.wan[1].ispConfirmed=false;
+ assert(C.validate(s).errors.some(x=>x.includes('WAN 2: cần xác nhận')));
+});
+test('ISP tagged VLAN ID range and integer validation',()=>{
+ for(const id of ['',0,'0','4095','100.5','abc','-1']){
+  const s=filled();s.wan[0].pppoeMode='tagged';s.wan[0].vlanId=id;
+  assert(C.validate(s).errors.some(x=>x.includes('VLAN ID phía nhà mạng')),String(id));
+ }
+ for(const id of [1,35,'100',4094]){
+  const s=filled();s.wan[0].pppoeMode='tagged';s.wan[0].vlanId=id;
+  assert.equal(C.validate(s).errors.length,0,'Should accept '+id);
+ }
+});
+test('WAN VLAN and LAN VLAN IDs do not collide if their parent interfaces differ',()=>{
+ const s=filled();s.wan[0].pppoeMode='tagged';s.wan[0].vlanId=10;
+ s.vlans=[{name:'VLAN10',id:10,mode:'routed',gateway:'192.168.10.1/24',dhcp:false,internet:true,trunkPorts:['sfp-sfpplus1'],accessPorts:[]}];
+ assert.equal(C.validate(s).errors.length,0);
+ const out=C.render(s).script;
+ assert.match(out,/name=vlan-WAN1 interface=ether1 vlan-id=10/);
+ assert.match(out,/name=VLAN10 interface=bridge-LAN vlan-id=10/);
+});
+test('DHCP and static WAN not forced to choose ISP PPPoE mode',()=>{
+ const s=filled();s.wan[1].type='dhcp';s.wan[1].pppoeMode='unknown';s.wan[1].ispConfirmed=false;
+ assert.equal(C.validate(s).errors.length,0);
 });

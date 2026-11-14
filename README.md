@@ -1,6 +1,13 @@
-# MikroTik Auto Config Studio — Offline (v1.2.0)
+# MikroTik Auto Config Studio — Offline (v1.3.0)
 
 Công cụ **tạo lệnh cấu hình MikroTik RouterOS 7** theo từng bước Next → Xem lệnh → Sao chép → Dán vào Winbox. Chạy **offline** trên Windows bằng `index.html` hoặc `CHAY_PHAN_MEM.bat` (không cần cài Node.js).
+
+## Bổ sung v1.3.0 — PPPoE WAN tagged VLAN (802.1Q)
+- Từng WAN PPPoE phải chọn **trực tiếp trên cổng vật lý** hoặc **qua VLAN 802.1Q**. Mặc định là **chưa xác nhận**, chặn xuất lệnh đến khi người dùng xác nhận với nhà mạng.
+- Nếu chọn PPPoE tagged, nhập **VLAN ID do nhà mạng cung cấp (1–4094)**. Lệnh `/interface vlan add` tự đứng **trước** lệnh `/interface pppoe-client add`, client quay trên `vlan-WAN1`, `vlan-WAN2`, ... thay cho `ether1`/`ether2`.
+- Thay đổi loại PPPoE, port hoặc VLAN ID sẽ xóa trạng thái xác nhận để tránh dùng sai thông tin. VLAN WAN tách biệt module VLAN LAN ở bước 4.
+- Các tuyến PCC, NAT, failover vẫn sử dụng interface PPPoE logic (`pppoe-WAN1`, ...); không coi cổng vật lý và VLAN WAN là hai đường Internet.
+- **Không có VLAN ID dùng chung cho mọi nhà mạng.** Người dùng cần hỏi tổng đài hoặc kỹ thuật viên cung cấp dịch vụ, đồng thời xác nhận ONT có chuyển tiếp VLAN tagged về MikroTik hay đã tự xử lý tag/untag.
 
 ## Điểm mới
 - Nhập tốc độ từng WAN như `250M`, `1G`; PCC tự tính tỷ lệ: **250M + 1G → 1:4 (5 phần)**. Giới hạn 24 phần để tránh quá nhiều luật mangle.
