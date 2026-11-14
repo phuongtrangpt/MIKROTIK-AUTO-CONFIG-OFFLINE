@@ -1,0 +1,8 @@
+v1.2.0 — 14/11/2026
+- WAN: nhập tốc độ đăng ký (250M, 1G...), tự tính số phần PCC (tối đa 24 phần).
+- LAN: chọn tất cả hoặc tự chọn cổng đưa vào bridge-LAN; cổng không chọn giữ độc lập.
+- PPPoE Server: thêm chạy chung bridge-LAN, hoặc bridge-PPPoE nhiều cổng riêng.
+- Vẫn giữ phương án VLAN PPPoE-only và cổng PPPoE riêng legacy.
+- Kiểm tra cổng xung đột WAN/LAN/PPPoE, tỷ lệ PCC, dữ liệu tốc độ.
+- Chân trang thông tin dịch vụ: 0963839369, Facebook leviethoaiphuong.
+- Giữ giao diện Next/Copy/Skip của 1.1.0.

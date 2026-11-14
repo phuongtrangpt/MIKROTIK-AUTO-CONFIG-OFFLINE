@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Tự động tạo lệnh cấu hình MikroTik RouterOS 7 hoàn toàn offline, không cần cài đặt.">
+  <title>MikroTik Auto Config Studio — Next Wizard Offline</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><svg width="27" height="27" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 10h22M5 22h22M10 5v22M22 5v22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="10" r="3" fill="currentColor"/><circle cx="22" cy="22" r="3" fill="currentColor"/></svg></div>
+        <div><div class="brand-name">MikroTik<span> Studio</span></div><div class="brand-sub">AUTO CONFIG • OFFLINE</div></div>
+      </div>
+      <div class="side-section">QUY TRÌNH CẤU HÌNH</div>
+      <nav id="sideNav" aria-label="Các bước cấu hình"></nav>
+      <div class="side-bottom">
+        <div class="offline-box"><span class="status-dot"></span> Chạy offline • Không gửi dữ liệu đi đâu</div>
+        <div class="side-small">RouterOS 7 • No Default Config<br>Phiên bản <b id="sideVer">1.2.0</b></div>
+      </div>
+    </aside>
+    <main class="main-area">
+      <header class="topbar">
+        <div class="topbar-crumb"><span class="crumb-icon">▦</span> <span id="topCrumb">Thiết bị & bảo mật</span></div>
+        <div class="topbar-actions"><span class="mini-pill">RouterOS 7</span><button class="btn btn-ghost btn-small" id="importJsonTop" type="button">↥ Mở mẫu JSON</button><input type="file" id="importJsonFile" accept=".json,application/json" hidden></div>
+      </header>
+      <div class="workspace">
+        <div class="welcome"><div><div class="eyebrow">MỖI ROUTER • MỘT CẤU HÌNH CHÍNH XÁC</div><h1 id="pageTitle">Thiết bị & bảo mật</h1><p id="pageDesc">Thiết lập model MikroTik và cấu hình hệ thống cơ bản.</p></div><div class="step-marker" id="stepMarker">01 / 07</div></div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="layout-cols"><section id="stepContent" class="content-panel" aria-live="polite"></section><aside class="summary-panel" id="summaryPanel"></aside></div>
+        <footer class="footer-nav"><button class="btn btn-outline" id="prevStep" type="button">← Quay lại</button><span class="footer-note" id="footerNote">Chỉ sinh lệnh • Không kết nối trực tiếp vào router</span><button class="btn btn-outline btn-skip" id="skipStep" type="button" hidden>Bỏ qua bước này →</button><button class="btn btn-primary" id="nextStep" type="button">Tiếp theo →</button></footer>
+        <div class="copyright-footer"><div><b>© 2026 MikroTik Auto Config Studio</b> — Phát triển bởi Phương Lê</div><p>Nhận cấu hình MikroTik theo yêu cầu · Thi công mạng nhà trọ, doanh nghiệp, văn phòng · Cân bằng tải, VLAN, PPPoE Server, VPN</p><div class="contact-links"><a href="tel:0963839369">☎ 0963839369</a><a href="https://www.facebook.com/leviethoaiphuong/" target="_blank" rel="noopener noreferrer">Facebook: Liên hệ tư vấn</a></div></div>
+      </div>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
