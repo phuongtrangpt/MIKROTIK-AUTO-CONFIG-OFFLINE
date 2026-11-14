@@ -1,4 +1,4 @@
-/* MikroTik Auto Config Studio — browser UI, runs entirely offline. */
+/* MikroTik Auto Config Studio v1.5.0 — browser UI, runs entirely offline. */
 (function(){
 'use strict';
 const C=window.MTCore;
@@ -16,6 +16,18 @@ const STEPS=[
 ];
 let s=C.defaultState(),step=0,started=false,phase='form',furthest=0,showSecrets=false,toastTimeout=null;
 const copiedSteps=new Set();
+// Keep a snapshot of copied CLI, so editing previous steps cannot silently
+// invalidate commands that may already have been pasted into Winbox.
+const copiedScriptSnapshots=new Map();
+let changedAfterCopy=false;
+function invalidateCopiedScripts(){
+ if(copiedScriptSnapshots.size){
+  const stages=C.renderStages(s);
+  if([...copiedScriptSnapshots].some(([idx,script])=>stages[idx]?.script!==script))changedAfterCopy=true;
+ }
+ copiedSteps.clear();
+}
+
 const el=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const get=(path)=>path.split('.').reduce((a,k)=>a?.[k],s);
@@ -64,7 +76,7 @@ function basicPage(){const modelOpts=Object.keys(C.MODELS).map(x=>[x,x]);return 
  <hr class="rule"><h2 class="section-title">DNS & Đồng bộ thời gian</h2><p class="section-sub">Sử dụng múi giờ Asia/Ho_Chi_Minh và cấu hình NTP để đồng bộ thời gian router.</p>
  <div class="form-grid">${field('DNS chính','system.dns1','1.1.1.1')}${field('DNS dự phòng','system.dns2','8.8.8.8')}${field('NTP Server 1','system.ntp1','time.google.com')}${field('NTP Server 2','system.ntp2','pool.ntp.org')}</div><hr class="rule">
  <h2 class="section-title">Bảo mật cơ bản</h2><p class="section-sub">Telnet, FTP, WebFig và API sẽ bị tắt; Winbox chỉ cho phép IP từ dải LAN quản trị.</p>
- <div style="display:grid;gap:10px">${toggle('Cho phép SSH','system.ssh','Mặc định tắt SSH; nếu bật, chỉ cho kết nối từ mạng LAN quản trị.')}${toggle('Tắt IPv6 (khi chưa sử dụng)','system.disableIPv6','Tránh thiếu firewall IPv6 khi thiết bị chưa được cấu hình IPv6.')}</div>
+ <div style="display:grid;gap:10px">${toggle('Cho phép SSH','system.ssh','Mặc định tắt SSH; nếu bật, chỉ cho kết nối từ mạng LAN quản trị.')}${toggle('Tắt IPv6 (bắt buộc cho mẫu IPv4 hiện tại)','system.disableIPv6','Bản này chưa sinh firewall/routing IPv6; phải tắt IPv6 để tránh vô tình mở truy cập từ WAN.')}</div>
  <div class="callout warn" style="margin-top:17px">Sau khi chạy script, Winbox qua MAC chỉ còn cho LAN; hãy nối máy của anh vào cổng LAN untagged và đặt IP cùng dải LAN nếu cần.</div>`;}
 function lanPage(){const lan=C.parseCIDR(s.lan.gateway),pool=C.autoPool(lan),a=C.getAlloc(s);return hSection('Bridge LAN & DHCP','Chọn tất cả cổng LAN hoặc tự chọn chính xác cổng nào được đưa vào bridge-LAN. Cổng không chọn để dành cho PPPoE Server hoặc mục đích khác.')+
  `<div class="soft-panel"><h3 class="subhead" style="margin:0 0 9px">Phân cổng Bridge LAN</h3>${select('Chọn cổng đưa vào Bridge LAN','lan.portMode',[['all','Tất cả cổng còn lại (trừ WAN và PPPoE riêng)'],['custom','Tự chọn cổng LAN']])}${s.lan.portMode==='custom'?`<div class="field" style="margin-top:15px"><label>Chọn cổng thuộc bridge-LAN</label><div class="port-grid">${a.available.map(v=>`<label class="port-check ${a.dedicated.includes(v)?'disabled':''}"><input type="checkbox" data-lanport="${esc(v)}" ${s.lan.selectedPorts.includes(v)?'checked':''} ${a.dedicated.includes(v)?'disabled':''}>${esc(v)}</label>`).join('')}</div><span class="hint">Cổng không chọn KHÔNG được thêm vào bridge-LAN. Có thể dành cho PPPoE Server riêng ở bước 5.</span></div>`:''}</div><div class="form-grid">${field('Địa chỉ Gateway LAN (CIDR) *','lan.gateway','192.168.1.1/24','IP đặt cho bridge-LAN. Không nhập network .0 mà nhập IP router.')}${select('DHCP Lease Time','lan.lease',[['1h','1 giờ'],['12h','12 giờ'],['1d','1 ngày'],['3d','3 ngày'],['7d','7 ngày']])}</div><div style="margin-top:17px">${toggle('Bật DHCP Server cho LAN','lan.dhcp','Tự tạo IP Pool, DHCP Network và gateway cho client.')}</div>`+
@@ -93,7 +105,7 @@ function pppPage(){let html=hSection('PPPoE Server cho khách hàng','Đặc bi�
  const vlanOptions=s.vlans.filter(v=>v.mode==='pppoe').map(v=>[String(v.id),v.name+' (ID '+v.id+')']);
  html+='<hr class="rule"><div class="form-grid">';
  html+=select('Kiểu kết nối PPPoE Server','ppp.mode',[['bridge','Chạy chung trên bridge-LAN (mọi cổng LAN đã chọn)'],['ports','Dùng nhóm cổng vật lý riêng (tạo bridge-PPPoE)'],['vlan','Dùng VLAN PPPoE-only'],['port','1 cổng riêng (chế độ cũ)']]);
- if(s.ppp.mode==='bridge')html+=`<div class="callout">PPPoE Server chạy trực tiếp trên <b>bridge-LAN</b> gồm ${esc(a.lanPorts.join(', ')||'chưa có cổng')}. ${s.lan.dhcp?'DHCP LAN cũng đang bật. Nếu muốn chỉ cấp PPPoE, hãy quay lại bước LAN và tắt DHCP.':''}</div>`;
+ if(s.ppp.mode==='bridge')html+=`<div class="callout warn"><b>PPPoE Server dùng chung bridge-LAN có IP:</b> MikroTik không khuyến nghị gán IP lên interface nhận PPPoE. Nên chọn bridge riêng hoặc VLAN PPPoE-only để ổn định và tách biệt mạng. <br>${esc(a.lanPorts.join(', ')||'chưa có cổng')}. ${s.lan.dhcp?'DHCP LAN đang bật trên cùng bridge; thiết bị có thể nhận DHCP mà không quay PPPoE.':''}</div>${toggle('Tôi hiểu rủi ro và xác nhận cố ý dùng chung bridge-LAN','ppp.sharedBridgeConfirmed','Bắt buộc xác nhận mới tạo lệnh PPPoE Server trong chế độ này.')}`;
  else if(s.ppp.mode==='ports')html+=`<div class="field wide"><label>Chọn các cổng riêng cho PPPoE Server</label><div class="port-grid">${options.map(([v])=>`<label class="port-check"><input type="checkbox" data-pppport="${esc(v)}" ${(s.ppp.ports||[]).includes(v)?'checked':''}>${esc(v)}</label>`).join('')}</div><span class="hint">Các cổng này ghép vào bridge-PPPoE riêng, không dùng DHCP LAN. Nếu ở bước LAN chọn Tự chọn cổng, đừng chọn trùng cổng.</span></div>`;
  else if(s.ppp.mode==='port')html+=select('Cổng riêng (chế độ cũ)','ppp.port',options);
  else html+=select('VLAN chạy PPPoE Server','ppp.vlanId',vlanOptions.length?vlanOptions:[['','Chưa có VLAN PPPoE-only']]);
@@ -122,7 +134,7 @@ function errorsForStage(i){
  const all=C.validate(s).errors;
  if(i>=5)return all;
  function matches(error,j){
-  if(j===0)return /^(Model|Tên RouterOS|Trùng cổng:|Tên cổng|DNS |Máy chủ NTP)/.test(error);
+  if(j===0)return /^(Model|Tên RouterOS|Trùng cổng:|Tên cổng|DNS |Máy chủ NTP|IPv6:)/.test(error);
   if(j===1)return /^(WAN |Phiên bản đầu hỗ trợ)/.test(error);
   if(j===2)return /^(IP LAN|LAN:|Không còn cổng LAN|Phải giữ ít nhất 1 cổng LAN)/.test(error);
   if(j===3)return /^(VLAN |Cổng .*VLAN|Chồng dải IP|Phải giữ ít nhất 1 cổng LAN|WAN tĩnh.*trùng subnet)/.test(error);
@@ -154,6 +166,8 @@ function outputPage(){const result=C.render(s),ok=!result.errors.length;
  html+='</div>';
  if(ok){html+=`<div class="code-header"><span class="code-title">Bản xem trước RouterOS CLI • ${result.script.split(/\n/).length} dòng</span><button class="btn btn-ghost btn-small" type="button" data-action="toggle-secrets">${showSecrets?'Ẩn mật khẩu':'Hiện mật khẩu'}</button></div><pre class="codeblock" id="generatedCode">${esc(showSecrets?result.script:redact(result.script))}</pre><p class="smallnote">Bản xem trước mặc định che mật khẩu. Tệp tải xuống và lệnh copy sẽ chứa mật khẩu đầy đủ.</p><div class="btn-row" style="margin:20px 0"><button class="btn btn-primary" data-action="download-rsc">↓ Tải file .RSC</button><button class="btn btn-outline" data-action="download-txt">↓ Tải file .TXT</button><button class="btn btn-outline" data-action="copy">▣ Sao chép Terminal</button></div>`;}
  else html+='<div class="empty-state" style="margin:16px 0">Sửa các lỗi được liệt kê phía trên, sau đó quay lại bước cuối để xuất file.</div>';
+ html+=`<div class="callout warn" style="margin-top:16px"><b>Kiểm tra cú pháp trước khi áp dụng:</b> Trên RouterOS 7.16+ có thể tải file .RSC lên router lab rồi chạy <code>import file-name=ten_file.rsc verbose=yes dry-run=yes</code>. Đây chỉ là kiểm thử cú pháp, vẫn cần kiểm tra trên thiết bị thật và không chạy lặp cấu hình.</div>`;
+ html+=`<div class="soft-panel" style="margin-top:20px"><h3 class="subhead">Kiểm tra trên MikroTik sau khi dán script</h3><p class="helper">Sao chép các lệnh <b>chỉ đọc</b> để xem kết nối PPPoE, route, DHCP, VLAN, firewall, PCQ và các phiên khách hàng khi thử nghiệm lab.</p><button type="button" class="btn btn-outline btn-small" data-action="copy-diagnostics">▣ Sao chép lệnh kiểm tra (chỉ đọc)</button></div>`;
  html+=`<hr class="rule"><h2 class="section-title">Lưu / mở mẫu khách hàng</h2><p class="section-sub">Lưu cấu hình để chỉnh sửa lần sau. Mặc định không lưu mật khẩu của WAN/PPPoE trong file JSON.</p><label class="checkrow"><input id="exportSecretCheckbox" type="checkbox"><span><strong>Lưu cả mật khẩu trong mẫu JSON</strong><small>Chỉ bật khi cần; JSON lưu mật khẩu dạng rõ.</small></span></label><div class="btn-row" style="margin-top:14px"><button class="btn btn-outline" data-action="save-json">↓ Lưu mẫu .JSON</button><button class="btn btn-red" data-action="reset-project">Tạo cấu hình mới</button></div>`;
  return html;
 }
@@ -172,6 +186,7 @@ function renderStep(){
    const errs=errorsForStage(step);
    if(errs.length)content+=`<div class="validation-panel fail"><b>Cần sửa ${errs.length} lỗi trước khi xem code bước này:</b><ul class="err-list">${errs.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
  }
+ if(started&&changedAfterCopy)content=`<div class="validation-panel fail"><b>⚠ Cấu hình đã thay đổi sau khi sao chép lệnh trước đó.</b><p class="helper">Nếu các lệnh cũ đã được dán vào router, hãy reset RouterOS về No Default Configuration rồi thực hiện lại theo đúng thứ tự. Không dán lệnh mới đè lên cấu hình cũ.</p></div>`+content;
  el('stepContent').innerHTML=content;
  el('prevStep').disabled=!started;
  el('skipStep').hidden=!started||phase==='code'||![3,4,6].includes(step);
@@ -212,7 +227,7 @@ function skipCurrent(){
  }
  if(step===4)s.ppp.enabled=false;
  if(step===6)s.qos.enabled=false;
- copiedSteps.delete(step);
+ invalidateCopiedScripts();
  step++;phase='form';furthest=Math.max(furthest,step);
  renderStep();window.scrollTo({top:0,behavior:'smooth'});toast('Đã bỏ qua module không sử dụng.');
 }
@@ -220,14 +235,14 @@ function updateSummary(){
  const result=C.validate(s),a=result.alloc;const all=C.ports(s);const relevant=started && step<7 ? errorsForStage(step) : []; 
  el('summaryPanel').innerHTML=`<div class="summary-card"><div class="summary-heading"><span class="circle">▦</span> Tóm tắt cấu hình</div><div class="sum-item"><span class="sum-label">Dự án</span><span class="sum-val">${esc(s.meta.project)}</span></div><div class="sum-item"><span class="sum-label">Model</span><span class="sum-val">${esc(s.meta.model)}</span></div><div class="sum-item"><span class="sum-label">Cổng thiết bị</span><span class="sum-val">${all.length}</span></div><div class="line"></div><div class="sum-item"><span class="sum-label">WAN</span><span class="sum-val">${s.wan.length}</span></div>${s.wan.map((w,i)=>`<div class="sum-item"><span class="sum-label">↳ ${esc(w.port)}</span><span class="sum-val">${esc(w.label||'WAN'+(i+1))} / ${esc(w.type==='pppoe'?(w.pppoeMode==='tagged'?'PPPoE VLAN '+w.vlanId:w.pppoeMode==='direct'?'PPPoE trực tiếp':'PPPoE chưa xác nhận'):w.type.toUpperCase())}</span></div>`).join('')}<div class="sum-item"><span class="sum-label">Cổng LAN</span><span class="sum-val">${a.lanPorts.length}</span></div><div class="sum-item"><span class="sum-label">Tỷ lệ PCC</span><span class="sum-val">${esc(C.computePcc(s.wan).weights.join(' : ')||'Chưa có')}</span></div><div class="sum-item"><span class="sum-label">Gateway LAN</span><span class="sum-val">${esc(s.lan.gateway)}</span></div><div class="sum-item"><span class="sum-label">VLAN</span><span class="sum-val">${s.vlans.length}</span></div><div class="sum-item"><span class="sum-label">PPPoE Server</span><span class="sum-val">${s.ppp.enabled?'Bật ('+C.parseUsers(s.ppp.usersText).users.length+' user)':'Tắt'}</span></div><div class="sum-item"><span class="sum-label">PCQ</span><span class="sum-val">${s.qos.enabled?'Bật':'Tắt'}</span></div><div class="line"></div><div class="summary-heading" style="font-size:12px">${relevant.length?'<span class="pill red">'+relevant.length+' lỗi bước này</span>':'<span class="pill green">Bước này hợp lệ</span>'}<span class="pill orange">${result.warnings.length} lưu ý</span></div>${relevant.slice(0,3).map(x=>`<div class="summary-error">• ${esc(x)}</div>`).join('')}${relevant.length>3?`<div class="smallnote" style="margin-top:8px">+ ${relevant.length-3} lỗi khác — xem chi tiết bên trái</div>`:''}</div><div class="summary-card"><div class="summary-heading">🔒 An toàn triển khai</div><p class="helper">RouterOS 7 · No Default Config. Tự kiểm tra lỗi xung đột IP/VLAN/port trước khi xuất. Không áp dụng trực tiếp lên thiết bị.</p><span class="pill green">100% xử lý tại máy</span></div>`;
 }
-function addVlan(){const ids=s.vlans.map(v=>Number(v.id));let id=10;while(ids.includes(id))id+=10;copiedSteps.clear();s.vlans.push({id,name:'VLAN'+id,mode:'routed',gateway:'192.168.'+id+'.1/24',dhcp:true,poolStart:'',poolEnd:'',internet:true,trunkPorts:[],accessPorts:[]});renderStep();toast('Đã tạo VLAN '+id+'. Chọn cổng Trunk hoặc Access.');}
-function changeWanCount(n){const all=C.ports(s);if(n>all.length){toast('Không đủ cổng vật lý trên thiết bị.');return;}const old=s.wan;copiedSteps.clear();
+function addVlan(){const ids=s.vlans.map(v=>Number(v.id));let id=10;while(ids.includes(id))id+=10;s.vlans.push({id,name:'VLAN'+id,mode:'routed',gateway:'192.168.'+id+'.1/24',dhcp:true,poolStart:'',poolEnd:'',internet:true,trunkPorts:[],accessPorts:[]});invalidateCopiedScripts();renderStep();toast('Đã tạo VLAN '+id+'. Chọn cổng Trunk hoặc Access.');}
+function changeWanCount(n){const all=C.ports(s);if(n>all.length){toast('Không đủ cổng vật lý trên thiết bị.');return;}const old=s.wan;
  s.wan=Array.from({length:n},(_,i)=>old[i]||{label:'WAN'+(i+1),port:all[i]||'ether'+(i+1),type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'});
  const used=new Set();s.wan.forEach((w,i)=>{if(!all.includes(w.port)||used.has(w.port))w.port=all.find(p=>!used.has(p))||w.port;used.add(w.port);});
  if(s.wan.some(w=>w.port===s.ppp.port))s.ppp.port=all.findLast(p=>!s.wan.some(w=>w.port===p))||'';
  s.lan.selectedPorts=(s.lan.selectedPorts||[]).filter(p=>!s.wan.some(w=>w.port===p));
  s.ppp.ports=(s.ppp.ports||[]).filter(p=>!s.wan.some(w=>w.port===p));
- renderStep();}
+ invalidateCopiedScripts();renderStep();}
 function prepareJSON(withSecrets){const x=C.copy(s);if(!withSecrets){x.wan.forEach(w=>w.password='');x.ppp.usersText='';}return JSON.stringify({app:'MikroTik Auto Config Studio',schema:1,version:C.VERSION,containsSecrets:!!withSecrets,data:x},null,2);}
 function download(data,name,mime){const blob=new Blob([data],{type:mime});const u=URL.createObjectURL(blob);const link=document.createElement('a');link.href=u;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);}
 function filename(ext){return (s.meta.project.trim().replace(/[^A-Za-z0-9_-]/g,'_').slice(0,35)||'MikroTik')+'_RouterOS7.'+ext;}
@@ -250,7 +265,7 @@ function mergeKnown(target,data){if(!data||typeof data!=='object'||Array.isArray
  return target;
 }
 async function readJSON(file){if(!file)return;try{if(file.size>1000000)throw new Error('Mẫu JSON quá lớn (tối đa 1MB).');const obj=JSON.parse(await file.text());if(obj.app!=='MikroTik Auto Config Studio'||obj.schema!==1||!obj.data)throw new Error('Không đúng định dạng mẫu cấu hình phiên bản 1.');if(obj.containsSecrets&&!confirm('Mẫu chứa mật khẩu. Chỉ nhập từ nguồn tin cậy. Tiếp tục?'))return;
- s=mergeKnown(C.defaultState(),obj.data);if(!Array.isArray(s.wan)||!s.wan.length)s.wan=C.defaultState().wan;step=0;furthest=7;started=true;phase='form';copiedSteps.clear();showSecrets=false;renderStep();toast('Đã mở mẫu cấu hình. Kiểm tra lại thông tin WAN trước khi xuất.');}catch(err){toast('Không đọc được JSON: '+err.message);}}
+ s=mergeKnown(C.defaultState(),obj.data);if(!Array.isArray(s.wan)||!s.wan.length)s.wan=C.defaultState().wan;s.wan.forEach(w=>{if(w.type==='pppoe')w.ispConfirmed=false;});step=0;furthest=7;started=true;phase='form';copiedSteps.clear();copiedScriptSnapshots.clear();changedAfterCopy=false;showSecrets=false;renderStep();toast('Đã mở mẫu cấu hình. Kiểm tra lại thông tin WAN trước khi xuất.');}catch(err){toast('Không đọc được JSON: '+err.message);}}
 function eventClick(e){const nav=e.target.closest('[data-step]');if(nav){const to=Number(nav.dataset.step);if(!started||to>furthest)return;step=to;phase='form';showSecrets=false;renderStep();window.scrollTo({top:0,behavior:'smooth'});return;}
  const btn=e.target.closest('[data-action]');if(!btn)return;const action=btn.dataset.action;
  if(action==='start-wizard'){started=true;step=0;phase='form';renderStep();return;}
@@ -258,27 +273,30 @@ function eventClick(e){const nav=e.target.closest('[data-step]');if(nav){const t
  if(action==='copy-step'){
    const errs=errorsForStage(step);if(errs.length){toast('Cấu hình còn lỗi.');return;}
    const stage=C.renderStages(s)[step];
-   copyScript(stage.script,()=>{copiedSteps.add(step);renderStep();});return;
+   copyScript(stage.script,()=>{copiedSteps.add(step);copiedScriptSnapshots.set(step,stage.script);renderStep();});return;
  }
  if(action==='add-vlan')return addVlan();
- if(action==='remove-vlan'){if(confirm('Xóa VLAN này khỏi cấu hình?')){s.vlans.splice(Number(btn.dataset.index),1);copiedSteps.clear();renderStep();}return;}
+ if(action==='remove-vlan'){if(confirm('Xóa VLAN này khỏi cấu hình?')){s.vlans.splice(Number(btn.dataset.index),1);invalidateCopiedScripts();renderStep();}return;}
  if(action==='peek'){const input=el(btn.dataset.input);input.type=input.type==='password'?'text':'password';return;}
- if(action==='example-ppp'){if(s.ppp.usersText&&!confirm('Thay danh sách PPPoE hiện tại bằng dữ liệu ví dụ?'))return;s.ppp.usersText='phong101,matkhau101,20M/50M\nphong102,matkhau102,30M/100M\nphong103,matkhau103,50M/150M';renderStep();return;}
+ if(action==='example-ppp'){if(s.ppp.usersText&&!confirm('Thay danh sách PPPoE hiện tại bằng dữ liệu ví dụ?'))return;s.ppp.usersText='phong101,matkhau101,20M/50M\nphong102,matkhau102,30M/100M\nphong103,matkhau103,50M/150M';invalidateCopiedScripts();renderStep();return;}
  if(action==='toggle-secrets'){showSecrets=!showSecrets;renderStep();return;}
- if(action==='reset-project'){if(confirm('Xóa toàn bộ thông tin đang nhập? (Không thể khôi phục nếu chưa lưu mẫu.)')){s=C.defaultState();step=0;furthest=0;started=false;phase='form';copiedSteps.clear();showSecrets=false;renderStep();}return;}
+ if(action==='reset-project'){if(confirm('Xóa toàn bộ thông tin đang nhập? (Không thể khôi phục nếu chưa lưu mẫu.)')){s=C.defaultState();step=0;furthest=0;started=false;phase='form';copiedSteps.clear();copiedScriptSnapshots.clear();changedAfterCopy=false;showSecrets=false;renderStep();}return;}
+ if(action==='copy-diagnostics'){copyScript(C.diagnostics(s));return;}
  if(action==='save-json'){const withSecrets=!!el('exportSecretCheckbox')?.checked;if(withSecrets&&!confirm('Tệp mẫu sẽ lưu cả mật khẩu dưới dạng rõ. Bạn vẫn muốn lưu?'))return;download(prepareJSON(withSecrets),filename('json'),'application/json;charset=utf-8');toast('Đã tạo mẫu JSON'+(withSecrets?' có mật khẩu.':'.'));return;}
  if(['download-rsc','download-txt','copy'].includes(action)) {const r=C.render(s);if(r.errors.length){toast('Cấu hình có lỗi; chưa thể xuất script.');renderStep();return;}if(!safeConfirm())return;
  if(action==='copy')copyScript(r.script);else{download(r.script,filename(action==='download-rsc'?'rsc':'txt'),'text/plain;charset=utf-8');toast('Đã tạo file '+(action==='download-rsc'?'.RSC':'.TXT')+'.');}return;}
 }
 function eventChange(e){const t=e.target;if(t.id==='wanCount')return changeWanCount(Number(t.value));
- if(t.id==='pppTxtFile'){const file=t.files[0];if(!file)return;if(file.size>500000){toast('TXT quá lớn, tối đa 500 KB.');return;}file.text().then(x=>{s.ppp.usersText=x;renderStep();toast('Đã đọc '+C.parseUsers(x).users.length+' tài khoản từ TXT/CSV.');}).catch(()=>toast('Không đọc được file TXT.'));return;}
+ if(t.id==='pppTxtFile'){const file=t.files[0];if(!file)return;if(file.size>500000){toast('TXT quá lớn, tối đa 500 KB.');return;}file.text().then(x=>{s.ppp.usersText=x;invalidateCopiedScripts();renderStep();toast('Đã đọc '+C.parseUsers(x).users.length+' tài khoản từ TXT/CSV.');}).catch(()=>toast('Không đọc được file TXT.'));return;}
  if(t.id==='importJsonFile'){readJSON(t.files[0]);t.value='';return;}
- if(t.dataset.lanport){const port=t.dataset.lanport;if(t.checked){if(!s.lan.selectedPorts.includes(port))s.lan.selectedPorts.push(port);}else s.lan.selectedPorts=s.lan.selectedPorts.filter(p=>p!==port);copiedSteps.clear();renderStep();return;}
- if(t.dataset.pppport){const port=t.dataset.pppport;if(t.checked){if(!s.ppp.ports.includes(port))s.ppp.ports.push(port);}else s.ppp.ports=s.ppp.ports.filter(p=>p!==port);copiedSteps.clear();renderStep();return;}
- if(t.dataset.vport){const [i,kind,p]=t.dataset.vport.split('|'),arr=s.vlans[Number(i)][kind];if(t.checked){if(!arr.includes(p))arr.push(p);}else s.vlans[Number(i)][kind]=arr.filter(x=>x!==p);copiedSteps.clear();renderStep();return;}
+ if(t.dataset.lanport){const port=t.dataset.lanport;if(t.checked){if(!s.lan.selectedPorts.includes(port))s.lan.selectedPorts.push(port);}else s.lan.selectedPorts=s.lan.selectedPorts.filter(p=>p!==port);invalidateCopiedScripts();renderStep();return;}
+ if(t.dataset.pppport){const port=t.dataset.pppport;if(t.checked){if(!s.ppp.ports.includes(port))s.ppp.ports.push(port);}else s.ppp.ports=s.ppp.ports.filter(p=>p!==port);invalidateCopiedScripts();renderStep();return;}
+ if(t.dataset.vport){const [i,kind,p]=t.dataset.vport.split('|'),arr=s.vlans[Number(i)][kind];if(t.checked){if(!arr.includes(p))arr.push(p);}else s.vlans[Number(i)][kind]=arr.filter(x=>x!==p);invalidateCopiedScripts();renderStep();return;}
  if(t.dataset.path){const path=t.dataset.path;let val=t.type==='checkbox'?t.checked:t.value;
  if(path==='wan.0.weight'||/\.weight$/.test(path)||/\.id$/.test(path))val=Number(val);
- set(path,val);copiedSteps.clear();
+ set(path,val);
+ if(path==='ppp.mode'||path==='lan.dhcp')s.ppp.sharedBridgeConfirmed=false;
+ invalidateCopiedScripts();
  // A changed ISP method requires fresh explicit confirmation. Never carry the old confirmation across.
  if(/^wan\.\d+\.(pppoeMode|type|port)$/.test(path)){
    const w=s.wan[Number(path.split('.')[1])];w.ispConfirmed=false;
@@ -292,7 +310,7 @@ function eventChange(e){const t=e.target;if(t.id==='wanCount')return changeWanCo
 }
 function eventInput(e){const t=e.target;if(t.dataset.path&&t.type!=='checkbox'&&t.tagName!=='SELECT'){
  let val=t.value;if(/\.weight$/.test(t.dataset.path)||/\.id$/.test(t.dataset.path))val=Number(val);
- set(t.dataset.path,val);copiedSteps.clear();
+ set(t.dataset.path,val);invalidateCopiedScripts();
  if(/^wan\.\d+\.vlanId$/.test(t.dataset.path)){
    const i=Number(t.dataset.path.split('.')[1]);s.wan[i].ispConfirmed=false;
    // Keep visible confirmation checkbox consistent with state as VLAN ID is edited.

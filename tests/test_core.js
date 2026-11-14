@@ -78,7 +78,7 @@ test('custom LAN selection uses only chosen ports, unused untouched',()=>{
  assert(C.getAlloc(s).unused.includes('ether5'));
 });
 test('PPPoE Server running on bridge-LAN',()=>{
- const s=filled();s.ppp.enabled=true;s.ppp.mode='bridge';s.ppp.usersText='u1,p1,20M/50M';
+ const s=filled();s.ppp.enabled=true;s.ppp.mode='bridge';s.ppp.sharedBridgeConfirmed=true;s.ppp.usersText='u1,p1,20M/50M';
  const output=ok(s);assert.match(output,/pppoe-server server add interface=bridge-LAN/);
  assert.doesNotMatch(output,/bridge-PPPoE/);
 });

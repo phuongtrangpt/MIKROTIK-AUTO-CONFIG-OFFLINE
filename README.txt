@@ -1,4 +1,4 @@
-MIKROTIK AUTO CONFIG STUDIO v1.4.1 — WINDOWS OFFLINE
+MIKROTIK AUTO CONFIG STUDIO v1.5.0 — WINDOWS OFFLINE
 RouterOS 7 | No Default Configuration | Next / Copy / Skip
 ==========================================================
 
@@ -48,3 +48,12 @@ AUTO UPDATE v1.4.0
 - File mau JSON/RSC/TXT khong bi sua; nen luu JSON neu dang lam viec do.
 
 FIX v1.4.1: Fixed Auto Update BAT passing a trailing-backslash folder path to PowerShell; works with paths containing spaces and parentheses.
+
+BAN 1.5.0 - KIEM TRA & AN TOAN
+- Tu kiem tra gateway, trung VLAN/interface, WAN tinh trung subnet, DHCP lease-time.
+- Chay PPPoE tren bridge-LAN co IP can tick xac nhan canh bao; khuyen nghi bridge/VLAN rieng.
+- Neu doi cau hinh sau khi Copy lenh, trang se canh bao reset router neu da dan lenh.
+- Trong buoc cuoi co nut Copy lenh kiem tra chi doc.
+- IPv6 chua co mo-dun firewall/routing nen phai de tat IPv6 trong wizard nay.
+- RouterOS 7.16+: import file-name=ten_file.rsc verbose=yes dry-run=yes de kiem tra truoc.
+- Chua duoc xac nhan tren phan cung MikroTik. Thu tren router lab truoc.

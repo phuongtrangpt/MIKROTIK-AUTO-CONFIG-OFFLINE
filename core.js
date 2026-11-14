@@ -1,11 +1,11 @@
-/* MikroTik Auto Config Studio — core v1.0.0 */
+/* MikroTik Auto Config Studio — core v1.5.0 */
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.MTCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const VERSION = '1.4.1';
+  const VERSION = '1.5.0';
   const MODELS = {
     RB5009: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','sfp-sfpplus1'],
     RB4011: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','ether9','ether10','sfp-sfpplus1'],
@@ -28,7 +28,7 @@
       lan: { portMode:'all', selectedPorts:[], gateway: '192.168.1.1/24', dhcp: true, poolStart: '',poolEnd:'',lease:'1d',interVlan:false },
       vlans: [],
       qos: {enabled:false,upload:'100M',download:'500M'},
-      ppp: {enabled:false,mode:'bridge',port:'ether8',ports:[],vlanId:'',service:'MIKROTIK-PPPOE',gateway:'10.20.0.1',network:'10.20.0.0/24',poolStart:'10.20.0.10',poolEnd:'10.20.0.250',usersText:''}
+      ppp: {enabled:false,mode:'bridge',port:'ether8',ports:[],vlanId:'',sharedBridgeConfirmed:false,service:'MIKROTIK-PPPOE',gateway:'10.20.0.1',network:'10.20.0.0/24',poolStart:'10.20.0.10',poolEnd:'10.20.0.250',usersText:''}
     };
   }
   function ports(s) {
@@ -55,6 +55,7 @@
     return {ip:m[1],ipNum:addr,prefix,mask,net,broadcast:bc,subnet:intToIp(net)+'/'+prefix,first:net+1,last:bc-1};
   }
   function networkContains(c,ip) {const n=ipToInt(ip);return !!c && n!==null && n>=c.first&&n<=c.last;}
+  function usableGateway(c) {return !!c && c.ipNum>=c.first && c.ipNum<=c.last;}
   function overlaps(a,b) {return !!a&&!!b && a.net<=b.broadcast && b.net<=a.broadcast;}
   function autoPool(c) {
     if(!c) return {start:'',end:''};
@@ -73,7 +74,13 @@
     const users=[], errors=[], lines=String(txt||'').replace(/\r/g,'').split('\n');
     if(lines.length>1001) errors.push('File PPPoE vượt 1000 dòng (giới hạn an toàn).');
     function splitLine(line) {
-      let delimiter=[',',';','\t','|'].find(x=>line.includes(x)) || ',';
+      // Detect separator outside quoted fields (password may contain a comma/semicolon).
+      let delimiter=null,quoted=false;
+      for(let j=0;j<line.length;j++){
+        if(line[j]==='"') {if(quoted&&line[j+1]==='"'){j++;continue;}quoted=!quoted;continue;}
+        if(!quoted&&[',',';','\t','|'].includes(line[j])){delimiter=line[j];break;}
+      }
+      delimiter=delimiter||',';
       let arr=[],buf='',quote=false;
       for(let i=0;i<line.length;i++){let ch=line[i];
         if(ch==='"'){if(quote && line[i+1]==='"'){buf+='"';i++;}else quote=!quote;}
@@ -145,6 +152,7 @@
   function validate(s) {
     const errors=[],warnings=[];
     const a=getAlloc(s), seen=new Set();
+    if(!Object.prototype.hasOwnProperty.call(MODELS,s.meta.model))errors.push('Model MikroTik không được hỗ trợ; hãy chọn trong danh sách hoặc dùng Tùy chỉnh.');
     if(!a.all.length) errors.push('Model tùy chỉnh phải khai báo ít nhất một cổng.');
     a.all.forEach(p=>{if(!validIf(p))errors.push('Tên cổng không hợp lệ: '+p);if(seen.has(p))errors.push('Trùng cổng: '+p);seen.add(p);});
     if(!validText(s.meta.identity,64)||!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(s.meta.identity)) errors.push('Tên RouterOS Identity chỉ dùng chữ, số, dấu - _ . (không khoảng trắng).');
@@ -163,11 +171,12 @@
           errors.push(label+': VLAN ID phía nhà mạng phải là số từ 1 tới 4094.');
         if(w.ispConfirmed!==true)errors.push(label+': cần xác nhận với nhà mạng về chế độ PPPoE và VLAN ID trước khi sinh lệnh.');
       }
-      if(w.type==='static') {const n=parseCIDR(w.ip);if(!n)errors.push(label+': IP tĩnh phải dạng 172.16.1.2/24.');else{allWanIPs.push({label,c:n});if(!networkContains(n,w.gateway))errors.push(label+': gateway IP phải thuộc subnet IP tĩnh (trừ cấu hình gateway đặc biệt).');}}
+      if(w.type==='static') {const n=parseCIDR(w.ip);if(!n)errors.push(label+': IP tĩnh phải dạng 172.16.1.2/24.');else{allWanIPs.push({label,c:n});if(!usableGateway(n))errors.push(label+': IP WAN không được là network/broadcast.');if(!networkContains(n,w.gateway))errors.push(label+': gateway IP phải thuộc subnet IP tĩnh (trừ cấu hình gateway đặc biệt).');if(ipToInt(w.gateway)===n.ipNum)errors.push(label+': gateway IP không được trùng IP của router.');}}
       if(parseSpeed(w.speed)===null) errors.push(label+': băng thông đăng ký phải dạng 250M, 1G hoặc 1000 Mbps (> 0).');
     });
+    for(let i=0;i<allWanIPs.length;i++)for(let j=i+1;j<allWanIPs.length;j++)if(overlaps(allWanIPs[i].c,allWanIPs[j].c))errors.push('WAN tĩnh '+allWanIPs[i].label+' và '+allWanIPs[j].label+' trùng subnet.');
     const pcc=computePcc(s.wan);
-    if(s.wan.length>1&&pcc.total&&pcc.error>0.08)warnings.push('Tỷ lệ băng thông chênh lệch lớn: giới hạn 24 phần PCC nên tỷ lệ thực tế chỉ gần đúng.');
+    if(s.wan.length>1&&pcc.total&&pcc.error>0.02)warnings.push('Tỷ lệ PCC chỉ gần đúng do giới hạn 24 phần; đường WAN có tốc độ rất nhỏ có thể nhận tỷ lệ kết nối cao hơn tỷ lệ băng thông.');
     if(s.wan.length>1&&s.wan.some(w=>w.type==='dhcp')) warnings.push('Multi-WAN DHCP dùng default-route-tables của RouterOS v7 mới; nên cập nhật RouterOS lên bản v7 stable gần nhất và kiểm tra các route sau khi chạy.');
     if(s.wan.length>1) warnings.push('PCC chia theo kết nối, không cộng băng thông cho một phiên tải đơn. Failover trong phiên bản này kiểm tra trạng thái PPP/gateway, không kiểm tra Internet end-to-end.');
     if(!['all','custom'].includes(s.lan.portMode||'all'))errors.push('LAN: chế độ phân cổng không hợp lệ.');
@@ -181,21 +190,27 @@
     if(a.management.length<1)errors.push('Phải giữ ít nhất 1 cổng LAN untagged (không trunk/access VLAN) để quản trị và khôi phục Winbox.');
     const lan=parseCIDR(s.lan.gateway);
     if(!lan) errors.push('IP LAN phải dạng 192.168.1.1/24 (CIDR từ /1 tới /30).');
+    else if(!usableGateway(lan))errors.push('LAN: Gateway phải là địa chỉ host, không phải địa chỉ network/broadcast.');
+    if(!['1h','12h','1d','3d','7d'].includes(s.lan.lease))errors.push('LAN: DHCP Lease Time không hợp lệ; hãy chọn một giá trị trong danh sách.');
     if(s.lan.dhcp&&lan) {const p=autoPool(lan); poolRange(lan,s.lan.poolStart||p.start,s.lan.poolEnd||p.end,'LAN',errors);}
+    if(s.system.disableIPv6!==true)errors.push('IPv6: bộ sinh lệnh hiện chưa cấu hình firewall/định tuyến IPv6 an toàn. Hãy bật Tắt IPv6 và triển khai IPv6 riêng sau khi kiểm tra.');
     const dns=[s.system.dns1,s.system.dns2];dns.forEach((v,i)=>{if(ipToInt(v)===null)errors.push('DNS '+(i+1)+' phải là IPv4 hợp lệ.');});
     [s.system.ntp1,s.system.ntp2].forEach((v,i)=>{if(!/^[A-Za-z0-9._-]{1,120}$/.test(v))errors.push('Máy chủ NTP '+(i+1)+' không hợp lệ.');});
     const vlans=[],ids=new Set(),names=new Set(),portAccess=new Map(),portTrunk=new Set();
+    const reservedInterfaces=new Set([...a.all,'bridge-LAN','bridge-PPPoE',...s.wan.flatMap((w,i)=>[w.type==='pppoe'?'pppoe-WAN'+(i+1):'',w.type==='pppoe'&&w.pppoeMode==='tagged'?'vlan-WAN'+(i+1):''].filter(Boolean))].map(x=>String(x).toLowerCase()));
     s.vlans.forEach((v,i)=>{
       const name='VLAN '+(i+1),id=Number(v.id);
       if(!Number.isInteger(id)||id<2||id>4094||id===1)errors.push(name+': VLAN ID phải từ 2 tới 4094.');
       if(ids.has(id))errors.push(name+': trùng VLAN ID '+id);ids.add(id);
       if(!validIf(v.name))errors.push(name+': tên interface VLAN không hợp lệ (chữ, số, - _ .).');
-      if(names.has(v.name))errors.push(name+': tên interface bị trùng.');names.add(v.name);
+      if(names.has(String(v.name).toLowerCase()))errors.push(name+': tên interface bị trùng.');names.add(String(v.name).toLowerCase());
+      if(reservedInterfaces.has(String(v.name).toLowerCase()))errors.push(name+': tên VLAN '+v.name+' trùng interface vật lý hoặc interface tự tạo.');
       const mode=v.mode||'routed';if(!['routed','pppoe'].includes(mode))errors.push(name+': chế độ VLAN không hợp lệ.');
-      let net=null;if(mode==='routed'){net=parseCIDR(v.gateway);if(!net)errors.push(name+': thiếu gateway CIDR.');else if(v.dhcp){const p=autoPool(net);poolRange(net,v.poolStart||p.start,v.poolEnd||p.end,name,errors);}}
+      let net=null;if(mode==='routed'){net=parseCIDR(v.gateway);if(!net)errors.push(name+': thiếu gateway CIDR.');else {if(!usableGateway(net))errors.push(name+': Gateway không được là địa chỉ network/broadcast.');if(v.dhcp){const p=autoPool(net);poolRange(net,v.poolStart||p.start,v.poolEnd||p.end,name,errors);}}}
       if(mode==='pppoe'&&v.dhcp)errors.push(name+': VLAN chỉ cấp PPPoE không được bật DHCP IP.');
       const tr=v.trunkPorts||[],ac=v.accessPorts||[];
       if(tr.length+ac.length===0) errors.push(name+': phải chọn ít nhất 1 cổng trunk hoặc access.');
+      if(new Set(tr).size!==tr.length||new Set(ac).size!==ac.length)errors.push(name+': trùng cổng trong danh sách trunk/access.');
       [...tr,...ac].forEach(p=>{if(!a.lanPorts.includes(p))errors.push(name+': '+p+' không thuộc các cổng LAN có thể sử dụng.');});
       tr.forEach(p=>{if(ac.includes(p))errors.push(name+': cổng '+p+' không thể đồng thời trunk và access của cùng VLAN.');portTrunk.add(p);});
       ac.forEach(p=>{if(portAccess.has(p))errors.push('Cổng '+p+' đang là access của nhiều VLAN.');portAccess.set(p,id);});
@@ -210,7 +225,12 @@
       if(!net||local===null||!networkContains(net,p.gateway)) errors.push('PPPoE Server: local-address không thuộc subnet PPP.');
       if(net){const gw={...net,ipNum:local};poolRange(gw,p.poolStart,p.poolEnd,'PPPoE Server',errors); ranges.push({name:'PPPoE Server',c:net});}
       if(!validText(p.service,63))errors.push('PPPoE Server: service name không hợp lệ.');
-      if(p.mode==='bridge'){if(a.lanPorts.length===0)errors.push('PPPoE Server: bridge-LAN không có cổng nào.');if(s.lan.dhcp)warnings.push('PPPoE Server và DHCP LAN cùng chạy trên bridge-LAN: thiết bị có thể nhận DHCP nếu không quay PPPoE. Tắt DHCP LAN nếu muốn chỉ cho quay PPPoE.');}
+      if(p.mode==='bridge'){
+        if(a.lanPorts.length===0)errors.push('PPPoE Server: bridge-LAN không có cổng nào.');
+        if(p.sharedBridgeConfirmed!==true)errors.push('PPPoE Server: cần xác nhận rõ sử dụng chung bridge-LAN có gán IP; MikroTik không khuyến nghị đặt IP trên interface nhận PPPoE.');
+        warnings.push('PPPoE Server trên bridge-LAN có địa chỉ IP: MikroTik khuyến nghị dùng bridge/VLAN riêng không gán IP để nhận PPPoE. Chỉ dùng chung bridge khi hiểu rủi ro của cấu hình này.');
+        if(s.lan.dhcp)warnings.push('PPPoE Server và DHCP LAN cùng chạy trên bridge-LAN: thiết bị có thể nhận DHCP nếu không quay PPPoE. Tắt DHCP LAN nếu muốn chỉ cho quay PPPoE.');
+      }
       else if(p.mode==='ports'||p.mode==='port'){const dest=p.mode==='port'?[p.port]:(p.ports||[]);if(!dest.length)errors.push('PPPoE Server: chọn ít nhất 1 cổng riêng.');if(new Set(dest).size!==dest.length)errors.push('PPPoE Server: trùng cổng riêng.');dest.forEach(v=>{if(!a.all.includes(v))errors.push('PPPoE Server: cổng '+v+' không tồn tại.');if(a.wanPorts.includes(v))errors.push('PPPoE Server: cổng '+v+' đang dùng làm WAN.');});}
       else if(p.mode==='vlan'){const v=s.vlans.find(v=>Number(v.id)===Number(p.vlanId));if(!v||v.mode!=='pppoe')errors.push('PPPoE Server: cần chọn VLAN đã tạo ở chế độ PPPoE-only.');}
       else errors.push('PPPoE Server: chế độ cổng không hợp lệ.');
@@ -247,10 +267,10 @@
     const txt=(k,t)=>add(k,'', '# '+t);
     txt(0,'01 - SYSTEM / SECURITY');
     add(0,'/system identity set name='+q(s.meta.identity),'/system clock set time-zone-name=Asia/Ho_Chi_Minh',
-      '/ip dns set servers='+s.system.dns1+','+s.system.dns2+' allow-remote-requests=yes',
-      '/system ntp client set enabled=yes mode=unicast',
-      '/system ntp client servers add address='+q(s.system.ntp1),
-      '/system ntp client servers add address='+q(s.system.ntp2));
+      '/ip dns set servers='+[...new Set([s.system.dns1,s.system.dns2])].join(',')+' allow-remote-requests=yes',
+      '/system ntp client set enabled=yes mode=unicast');
+    [...new Map([s.system.ntp1,s.system.ntp2].map(host=>[host.toLowerCase(),host])).values()]
+      .forEach(host=>add(0,'/system ntp client servers add address='+q(host)));
     for(const service of ['telnet','ftp','www','www-ssl','api','api-ssl'])add(0,'/ip service set '+service+' disabled=yes');
     add(0,'/ip service set ssh disabled='+(s.system.ssh?'no':'yes'),'/ip service set winbox disabled=no');
     if(s.system.disableIPv6)add(0,'/ipv6 settings set disable-ipv6=yes');
@@ -258,8 +278,9 @@
     // Protect an unconfigured router the moment a WAN client receives connectivity.
     // These bootstrap input rules remain above the final firewall rules.
     add(0,'/ip firewall filter add chain=input action=accept connection-state=established,related,untracked comment='+q('Bootstrap established'),
+      '/ip firewall filter add chain=input action=drop connection-state=invalid comment='+q('Bootstrap drop invalid'),
       '/ip firewall filter add chain=input action=accept in-interface-list=WAN protocol=udp src-port=67 dst-port=68 comment='+q('Bootstrap DHCP reply'),
-      '/ip firewall filter add chain=input action=drop in-interface-list=WAN comment='+q('Bootstrap block WAN management'));
+      '/ip firewall filter add chain=input action=drop in-interface-list=WAN comment='+q('Bootstrap block WAN management')); 
     txt(1,'02 - WAN / ROUTING TABLES');
     if(s.wan.length>1)wanInfo.forEach(x=>add(1,'/routing table add name='+x.table+' fib'));
     wanInfo.forEach(({w,i,ifname})=>{
@@ -352,6 +373,7 @@
     txt(5,'06 - PCC / NAT / FIREWALL');
     add(5,'/ip firewall address-list add list=AUTO-LOCAL address='+lanNet,
       '/ip firewall address-list add list=AUTO-INET address='+lanNet);
+    s.wan.filter(w=>w.type==='static').forEach(w=>{const c=parseCIDR(w.ip);if(c)add(5,'/ip firewall address-list add list=AUTO-LOCAL address='+c.subnet+' comment='+q('Static WAN connected '+w.port));});
     s.vlans.filter(x=>(x.mode||'routed')==='routed').forEach(x=>{
       const c=parseCIDR(x.gateway);if(!c)return;
       add(5,'/ip firewall address-list add list=AUTO-LOCAL address='+c.subnet);
@@ -370,12 +392,10 @@
         '/ip firewall mangle add chain=output dst-address-type=!local connection-mark='+x.mark+' action=mark-routing new-routing-mark='+x.table+' passthrough=no'));
     } else add(5,'# Mot WAN: khong dung PCC');
     add(5,'/ip firewall nat add chain=srcnat out-interface-list=WAN action=masquerade comment='+q('AUTO WAN NAT'),
-      '/ip firewall filter add chain=input action=accept connection-state=established,related,untracked',
-      '/ip firewall filter add chain=input action=drop connection-state=invalid',
+      // Established and invalid already handled at top of input in bootstrap stage.
       '/ip firewall filter add chain=input action=accept protocol=icmp in-interface-list=LAN',
       '/ip firewall filter add chain=input action=accept in-interface-list=LAN protocol=udp dst-port=53,67',
       '/ip firewall filter add chain=input action=accept in-interface-list=LAN protocol=tcp dst-port=53',
-      '/ip firewall filter add chain=input action=accept in-interface-list=WAN protocol=udp src-port=67 dst-port=68',
       '/ip firewall filter add chain=input action=accept in-interface=bridge-LAN src-address='+lanNet+' protocol=tcp dst-port=8291'+(s.system.ssh?',22':'')+' comment='+q('Management LAN only'),
       '/ip firewall filter add chain=input action=drop comment='+q('Drop all other input'),
       '/ip firewall filter add chain=forward action=accept connection-state=established,related,untracked',
@@ -396,6 +416,17 @@
         +'# RouterOS 7 - Chi dan 1 lan tren No Default Configuration\r\n'
         +lines.filter(Boolean).join('\r\n')+'\r\n'}));
   }
+  // Read-only commands to verify a lab router after applying each module.
+  function diagnostics(s){
+    const lines=['# MikroTik Auto Config Studio - KIEM TRA LAB (chi doc, khong thay doi cau hinh)',
+      '/interface print detail','/interface pppoe-client print detail','/ip dhcp-client print detail',
+      '/ip address print','/ip route print detail','/ip dns print','/system ntp client print',
+      '/interface bridge port print','/interface bridge vlan print',
+      '/ip dhcp-server print detail','/ip dhcp-server lease print',
+      '/ip firewall mangle print stats','/ip firewall filter print stats','/ip firewall nat print stats',
+      '/ppp active print','/queue simple print'];
+    return lines.join('\r\n')+'\r\n';
+  }
   function renderStages(s){return createStageScripts(s);}
   function render(s){
     const validation=validate(s);
@@ -409,5 +440,5 @@
     const active=stages.filter(x=>x.enabled);
     return {script:top.join('\r\n')+'\r\n'+active.map(x=>x.script).join('\r\n')+'# SCRIPT COMPLETE\r\n',stages,...validation};
   }
-  return {VERSION,STAGE_INFO,renderStages,MODELS,defaultState,ports,parseSpeed,computePcc,parseCIDR,ipToInt,intToIp,autoPool,parseUsers,validate,render,copy,q,getAlloc};
+  return {VERSION,STAGE_INFO,renderStages,MODELS,defaultState,ports,parseSpeed,computePcc,parseCIDR,ipToInt,intToIp,autoPool,parseUsers,validate,render,diagnostics,copy,q,getAlloc};
 });

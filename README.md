@@ -1,6 +1,20 @@
-# MikroTik Auto Config Studio — Offline (v1.4.1)
+# MikroTik Auto Config Studio — Offline (v1.5.0)
 
 Công cụ **tạo lệnh cấu hình MikroTik RouterOS 7** theo từng bước Next → Xem lệnh → Sao chép → Dán vào Winbox. Chạy **offline** trên Windows bằng `index.html` hoặc `CHAY_PHAN_MEM.bat` (không cần cài Node.js).
+
+## v1.5.0 — Rà soát bộ sinh script RouterOS 7 và an toàn triển khai
+- Rà soát thứ tự firewall: `accept established/related/untracked` → `drop invalid` → cho phép DHCP client WAN → chặn input WAN. Không tạo trùng rule bootstrap khi sang bước PCC/NAT.
+- Kiểm tra IP gateway LAN, VLAN và WAN tĩnh không trùng network/broadcast; gateway WAN không được trùng IP router; chặn WAN tĩnh chồng subnet.
+- Kiểm tra tên VLAN trùng interface thiết bị/bridge/PPPoE tự sinh, trùng cổng trunk/access, model không hợp lệ và DHCP Lease Time ngoài danh sách (kể cả mẫu JSON nhập vào).
+- Phân biệt VLAN WAN nhà mạng và VLAN LAN. Thêm subnet WAN tĩnh vào danh sách bỏ qua đánh dấu PCC để quản trị gateway modem thuận tiện hơn.
+- PPPoE Server chạy chung `bridge-LAN` có IP: bắt buộc xác nhận rõ rủi ro. **MikroTik khuyến nghị cổng nhận PPPoE không gán IP**; phương án an toàn hơn là bridge riêng hoặc VLAN PPPoE-only. Khi dùng chung với DHCP, mạng có thể nhận DHCP không cần PPPoE.
+- CSV/TXT PPPoE phân tích dấu ngăn cách nằm ngoài chuỗi trong dấu nháy kép, hỗ trợ mật khẩu có dấu phẩy hoặc chấm phẩy. Tự bỏ DNS/NTP trùng lặp.
+- Mẫu tạo theo IPv4. Nếu chưa có cấu hình IPv6 firewall và định tuyến an toàn, không cho bật IPv6 bằng wizard ở phiên bản này.
+- Wizard cảnh báo nếu các lệnh đã Copy trước đó thay đổi sau khi sửa cấu hình; nếu đã dán lên router, reset lại trước khi chạy script mới.
+- Khi mở lại JSON, bắt buộc xác nhận lại thông số PPPoE với nhà mạng. Bước cuối có nút **Sao chép lệnh kiểm tra (chỉ đọc)**.
+- Bổ sung kiểm thử lõi, kiểm thử 9 tổ hợp hai WAN PPPoE/DHCP/Static, VLAN, PPPoE Server, PCQ, chuỗi ký tự đặc biệt và cập nhật Windows.
+
+**Giới hạn kiểm thử:** Kiểm thử Node.js và quy tắc sinh lệnh không thay thế thử chạy trên MikroTik thật. Để xác minh cú pháp RouterOS 7.16+ trước khi triển khai, có thể tải file `.rsc` lên router lab rồi dùng `import file-name=ten_file.rsc verbose=yes dry-run=yes` để kiểm tra mà chưa thay đổi cấu hình. Luôn giữ Safe Mode và sao lưu; không áp dụng script tổng lên router đã cấu hình.
 
 ## v1.4.1 — Sửa lỗi cập nhật Windows ở đường dẫn có dấu cách/ngoặc
 - Sửa lỗi `Resolve-Path : Illegal characters in path` khi chạy `CAP_NHAT_TU_DONG.bat` ở các thư mục như `New folder (29)`.
@@ -44,6 +58,8 @@ node tests/test_core.js
 node tests/test_ui_smoke.js
 node tests/test_update.js
 node tests/test_update_ui.js
+node tests/test_audit.js
+node tests/test_wizard_edit.js
 ```
 
 ## Liên hệ

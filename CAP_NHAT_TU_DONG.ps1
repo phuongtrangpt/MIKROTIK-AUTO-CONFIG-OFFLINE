@@ -38,7 +38,7 @@ $Extract = Join-Path $Temp 'unpacked'
 New-Item -ItemType Directory -Path $Extract -Force | Out-Null
 $Replaced = @()
 $Backup = $null
-$Files = @('index.html','core.js','app.js','style.css','update.js','README.md','README.txt','CHANGELOG.txt','CHAY_PHAN_MEM.bat','CAP_NHAT_TU_DONG.bat','CAP_NHAT_TU_DONG.ps1','tests/test_core.js','tests/test_ui_smoke.js','tests/test_update.js','tests/test_update_ui.js','tests/test_updater_path.js','tests/test_windows_batch_path.ps1')
+$Files = @('index.html','core.js','app.js','style.css','update.js','README.md','README.txt','CHANGELOG.txt','CHAY_PHAN_MEM.bat','CAP_NHAT_TU_DONG.bat','CAP_NHAT_TU_DONG.ps1','tests/test_core.js','tests/test_ui_smoke.js','tests/test_update.js','tests/test_update_ui.js','tests/test_updater_path.js','tests/test_windows_batch_path.ps1','tests/test_audit.js','tests/test_wizard_edit.js')
 try {
   Write-Host 'Downloading release ZIP from official GitHub repository...'
   Invoke-WebRequest -Uri $ExpectedUrl -OutFile $Archive -MaximumRedirection 5 -TimeoutSec 120 -UseBasicParsing

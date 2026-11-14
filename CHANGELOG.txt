@@ -1,3 +1,13 @@
+v1.5.0 — 14/11/2026
+- Audit firewall Bootstrap, input drop order, avoid duplicate established/DHCP accept rules.
+- Reject invalid network/broadcast gateway, overlapping static WAN networks, conflicting VLAN names/ports, unknown models and unsafe DHCP lease-time.
+- Add static WAN connected subnets to LOCAL exclusion for PCC.
+- Require explicit acknowledgment for PPPoE Server on bridge-LAN with router IP; warn DHCP mixing.
+- Parse quoted CSV semicolon/comma correctly; deduplicate DNS and NTP.
+- Block unsupported unprotected IPv6 operation; warn after changes to copied step scripts.
+- Reconfirm ISP mode on imported JSON; add read-only diagnostics to check WAN/route/VLAN/DHCP/NAT/PPPoE/PCQ.
+- Extended regression tests, WAN-type matrix, and Windows updater tests.
+
 v1.4.1 — 14/11/2026
 - Fix PowerShell Resolve-Path : Illegal characters in path, including Windows folders with spaces and parentheses.
 - CAP_NHAT_TU_DONG.bat no longer passes -AppDir; PS1 uses its own $PSScriptRoot.
