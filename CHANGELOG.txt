@@ -1,3 +1,7 @@
+v1.3.1 — 14/11/2026
+- Sửa tên tác giả/đơn vị liên hệ hiển thị thành Việt Phương (giữ nguyên số 0963839369 và Facebook).
+- Cập nhật thông tin bản quyền và ghi chú phát hành công khai.
+
 v1.3.0 — 14/11/2026
 - WAN PPPoE: chọn trực tiếp / VLAN 802.1Q riêng từng WAN, yêu cầu xác nhận với ISP.
 - Nhập VLAN ID 1–4094; sinh VLAN WAN trước PPPoE Client, giữ PCC và NAT trên interface PPPoE.

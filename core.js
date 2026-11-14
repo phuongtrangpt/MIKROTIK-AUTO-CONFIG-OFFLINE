@@ -5,7 +5,7 @@
   root.MTCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const VERSION = '1.3.0';
+  const VERSION = '1.3.1';
   const MODELS = {
     RB5009: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','sfp-sfpplus1'],
     RB4011: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','ether9','ether10','sfp-sfpplus1'],
