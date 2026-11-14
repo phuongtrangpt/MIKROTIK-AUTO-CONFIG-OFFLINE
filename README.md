@@ -1,6 +1,12 @@
-# MikroTik Auto Config Studio — Offline (v1.4.0)
+# MikroTik Auto Config Studio — Offline (v1.4.1)
 
 Công cụ **tạo lệnh cấu hình MikroTik RouterOS 7** theo từng bước Next → Xem lệnh → Sao chép → Dán vào Winbox. Chạy **offline** trên Windows bằng `index.html` hoặc `CHAY_PHAN_MEM.bat` (không cần cài Node.js).
+
+## v1.4.1 — Sửa lỗi cập nhật Windows ở đường dẫn có dấu cách/ngoặc
+- Sửa lỗi `Resolve-Path : Illegal characters in path` khi chạy `CAP_NHAT_TU_DONG.bat` ở các thư mục như `New folder (29)`.
+- Batch file không truyền `-AppDir` nữa; PowerShell tự xác định thư mục thực tế bằng `$PSScriptRoot`.
+- **Người dùng bản v1.4.0:** cập nhật ngay một dòng trong file BAT, bỏ `-AppDir "%~dp0"`, sau đó chạy BAT để nâng cấp trực tiếp lên v1.4.1. Hoặc tải ZIP v1.4.1 tại GitHub Releases, giải nén vào thư mục mới.
+- Bản vá không ảnh hưởng đến dữ liệu cấu hình RouterOS đã lưu.
 
 ## Mới trong v1.4.0 — Cập nhật trực tiếp từ ứng dụng
 - Trên giao diện có nút **↻ Kiểm tra cập nhật**. Khi nhấn, ứng dụng cần Internet để đọc phiên bản mới nhất tại GitHub Releases của repository chính thức. Nếu có bản mới, trình duyệt được yêu cầu **tự tải ZIP**; không cần vào trang GitHub để tìm link. Nếu lỗi mạng, mọi chức năng cấu hình vẫn dùng offline bình thường.

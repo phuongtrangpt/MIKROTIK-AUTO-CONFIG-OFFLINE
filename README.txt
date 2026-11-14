@@ -1,4 +1,4 @@
-MIKROTIK AUTO CONFIG STUDIO v1.4.0 — WINDOWS OFFLINE
+MIKROTIK AUTO CONFIG STUDIO v1.4.1 — WINDOWS OFFLINE
 RouterOS 7 | No Default Configuration | Next / Copy / Skip
 ==========================================================
 
@@ -46,3 +46,5 @@ AUTO UPDATE v1.4.0
 - De TU CAI DAT: dong tab cu, bam CAP_NHAT_TU_DONG.bat ngay trong thu muc dang chay; PowerShell download, backup va thay code.
 - Khong can cai Node.js/Python, khong upload script/mat khau.
 - File mau JSON/RSC/TXT khong bi sua; nen luu JSON neu dang lam viec do.
+
+FIX v1.4.1: Fixed Auto Update BAT passing a trailing-backslash folder path to PowerShell; works with paths containing spaces and parentheses.

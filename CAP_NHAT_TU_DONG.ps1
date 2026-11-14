@@ -1,11 +1,13 @@
 # Offline application updater: fetch ONLY official GitHub Release ZIP.
 # Invoke from CAP_NHAT_TU_DONG.bat. No admin privilege normally required.
-param([string]$AppDir = (Split-Path -Parent $MyInvocation.MyCommand.Path))
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repo = 'phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE'
-$Root = (Resolve-Path -LiteralPath $AppDir).Path
+# PSScriptRoot is set by PowerShell from the actual .ps1 file location; no BAT -AppDir argument.
+# Avoid Windows trailing-backslash + quoted-argument parsing issues (e.g. New folder (29)).
+if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) { throw 'Unable to find the updater directory.' }
+$Root = (Resolve-Path -LiteralPath $PSScriptRoot).ProviderPath
 $Core = Join-Path $Root 'core.js'
 if (-not (Test-Path -LiteralPath $Core)) { throw 'core.js not found; run updater from the application folder.' }
 
@@ -36,7 +38,7 @@ $Extract = Join-Path $Temp 'unpacked'
 New-Item -ItemType Directory -Path $Extract -Force | Out-Null
 $Replaced = @()
 $Backup = $null
-$Files = @('index.html','core.js','app.js','style.css','update.js','README.md','README.txt','CHANGELOG.txt','CHAY_PHAN_MEM.bat','CAP_NHAT_TU_DONG.bat','CAP_NHAT_TU_DONG.ps1','tests/test_core.js','tests/test_ui_smoke.js','tests/test_update.js')
+$Files = @('index.html','core.js','app.js','style.css','update.js','README.md','README.txt','CHANGELOG.txt','CHAY_PHAN_MEM.bat','CAP_NHAT_TU_DONG.bat','CAP_NHAT_TU_DONG.ps1','tests/test_core.js','tests/test_ui_smoke.js','tests/test_update.js','tests/test_update_ui.js','tests/test_updater_path.js','tests/test_windows_batch_path.ps1')
 try {
   Write-Host 'Downloading release ZIP from official GitHub repository...'
   Invoke-WebRequest -Uri $ExpectedUrl -OutFile $Archive -MaximumRedirection 5 -TimeoutSec 120 -UseBasicParsing

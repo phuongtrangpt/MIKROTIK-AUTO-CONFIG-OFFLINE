@@ -1,4 +1,4 @@
-/* MikroTik Auto Config Studio — GitHub Release version checker (v1.4.0).
+/* MikroTik Auto Config Studio — GitHub Release version checker (v1.4.1).
  * Không tải/gửi cấu hình hay mật khẩu; chỉ đọc metadata công khai. */
 (function(root,factory){
   const api=factory();

@@ -1,3 +1,9 @@
+v1.4.1 — 14/11/2026
+- Fix PowerShell Resolve-Path : Illegal characters in path, including Windows folders with spaces and parentheses.
+- CAP_NHAT_TU_DONG.bat no longer passes -AppDir; PS1 uses its own $PSScriptRoot.
+- Include test_updater_path.js and verify Windows batch quoting in release CI.
+- Version metadata updated. No change to MikroTik RouterOS configuration generation.
+
 v1.4.0 — 14/11/2026
 - Them nut Kiem tra cap nhat trong ung dung: tu lay GitHub Release/latest va tu yeu cau tai ZIP moi.
 - Them CAP_NHAT_TU_DONG.bat / ps1 de cap nhat tai cho tren Windows, backup va phuc hoi khi loi.
