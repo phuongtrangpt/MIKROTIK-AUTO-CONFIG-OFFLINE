@@ -1,3 +1,8 @@
+v1.4.0 — 14/11/2026
+- Them nut Kiem tra cap nhat trong ung dung: tu lay GitHub Release/latest va tu yeu cau tai ZIP moi.
+- Them CAP_NHAT_TU_DONG.bat / ps1 de cap nhat tai cho tren Windows, backup va phuc hoi khi loi.
+- Khong gui du lieu cau hinh len Internet; chi truy van phien ban khi nguoi dung bam.
+
 v1.3.1 — 14/11/2026
 - Sửa tên tác giả/đơn vị liên hệ hiển thị thành Việt Phương (giữ nguyên số 0963839369 và Facebook).
 - Cập nhật thông tin bản quyền và ghi chú phát hành công khai.

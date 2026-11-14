@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const MTCore=require('../core.js');
+const MTUpdater=require('../update.js');
 const elements=new Map();
 class Element {
   constructor(id){this.id=id;this.innerHTML='';this.textContent='';this.style={};this.events={};this.hidden=false;this.disabled=false;this.classList={add(){},remove(){}};}
@@ -11,7 +12,7 @@ class Element {
   closest(){return null;}
 }
 function el(id){if(!elements.has(id))elements.set(id,new Element(id));return elements.get(id);}
-const ctx={window:{MTCore,confirm:()=>true,scrollTo(){}},document:{getElementById:el},navigator:{},console,setTimeout,clearTimeout,scrollTo(){},Blob,URL,TextDecoder};ctx.window.window=ctx.window;
+const ctx={window:{MTCore,MTUpdater,confirm:()=>true,scrollTo(){}},document:{getElementById:el},navigator:{},console,setTimeout,clearTimeout,scrollTo(){},Blob,URL,TextDecoder};ctx.window.window=ctx.window;
 vm.runInNewContext(fs.readFileSync(require.resolve('../app.js'),'utf8'),ctx,{timeout:1000});
 function action(which){el('stepContent').events.click({target:{closest(sel){if(sel==='[data-action]')return {dataset:{action:which}};return null;}}});}
 function fill(path,value){el('stepContent').events.input({target:{dataset:{path},value,tagName:'INPUT',type:'text'}});}

@@ -2,6 +2,7 @@
 (function(){
 'use strict';
 const C=window.MTCore;
+const Updater=window.MTUpdater;
 if(!C){document.body.textContent='Thiếu file core.js. Hãy giải nén toàn bộ ZIP trước khi mở index.html.';return;}
 const STEPS=[
   ['Thiết bị & bảo mật','Chọn model, DNS, thời gian và bảo mật ban đầu.','01'],
@@ -302,12 +303,58 @@ function eventInput(e){const t=e.target;if(t.dataset.path&&t.type!=='checkbox'&&
  if(/^wan\.\d+\.(speed|label)$/.test(t.dataset.path))refreshPccPanel();
  updateSummary();
  }}
+
+// Kiểm tra phiên bản khi người dùng yêu cầu; không gửi cấu hình/mật khẩu lên GitHub.
+let lastUpdateLink='';
+function showUpdatePanel(body){
+ const panel=el('updatePanel');
+ if(!panel)return;
+ panel.innerHTML='<div class="update-title"><span>↻ Cập nhật MikroTik Studio</span><button type="button" id="closeUpdatePanel" aria-label="Đóng">×</button></div>'+body;
+ panel.hidden=false;
+ const close=el('closeUpdatePanel');
+ if(close)close.addEventListener('click',()=>{panel.hidden=true;});
+ const retry=el('retryUpdateDownload');
+ if(retry)retry.addEventListener('click',()=>{if(lastUpdateLink)downloadReleaseZip(lastUpdateLink);});
+}
+function downloadReleaseZip(url){
+ // Chỉ tải đường dẫn đã được xác minh chính xác từ repository chính thức.
+ try{
+   const link=document.createElement('a');
+   link.href=url;link.rel='noopener noreferrer';
+   document.body.appendChild(link);link.click();link.remove();
+   return true;
+ }catch(err){toast('Trình duyệt không cho tải ZIP tự động. Thử nút Tải ZIP bên dưới.');return false;}
+}
+async function checkUpdateAndDownload(){
+ const button=el('updateCheckButton');
+ if(!Updater){toast('Thiếu update.js. Hãy giải nén đủ file.');return;}
+ if(button.disabled)return;
+ button.disabled=true;button.textContent='Đang kiểm tra...';lastUpdateLink='';
+ showUpdatePanel('<p>Đang kết nối GitHub Releases để tìm bản mới nhất. Chỉ truy vấn thông tin phiên bản, không gửi dữ liệu khách hàng.</p>');
+ try{
+   const release=await Updater.checkLatest(C.VERSION);
+   if(release.state==='current'){
+     showUpdatePanel('<p>✓ <b>Đang dùng phiên bản mới nhất: v'+esc(C.VERSION)+'</b>.</p><p>Khi có bản mới, anh chỉ cần nhấn nút kiểm tra một lần nữa.</p>');
+   }else{
+     lastUpdateLink=release.url;
+     const triggered=downloadReleaseZip(release.url);
+     showUpdatePanel('<p>Đã tìm thấy <b>v'+esc(release.version)+'</b> (máy đang dùng <b>v'+esc(C.VERSION)+'</b>).</p>'+
+       '<p>'+(triggered?'Đã yêu cầu trình duyệt tải ZIP mới nhất. Kiểm tra mục Downloads của trình duyệt.':'Chưa thể tự khởi động tải ZIP.')+'</p>'+
+       '<div class="btn-row"><button class="btn btn-primary btn-small" id="retryUpdateDownload" type="button">↓ Tải ZIP lại</button></div>'+
+       '<div class="note"><b>Cập nhật tại chỗ trên Windows:</b> để tự tải, sao lưu và thay file chương trình mà không cần giải nén thủ công, hãy chạy <code>CAP_NHAT_TU_DONG.bat</code> trong thư mục phần mềm. Trình duyệt không có quyền ghi đè file đang chạy. Nên lưu mẫu JSON trước khi cập nhật.</div>');
+   }
+ }catch(err){
+   showUpdatePanel('<p>⚠ <b>Không kiểm tra được phiên bản mới.</b></p><p>'+esc(err?.message||String(err))+'</p><div class="note">Cần kết nối Internet để kiểm tra GitHub; chức năng cấu hình MikroTik vẫn hoạt động offline bình thường.</div>');
+ }finally{button.disabled=false;button.textContent='↻ Kiểm tra cập nhật';}
+}
+
 el('stepContent').addEventListener('click',eventClick);
 el('sideNav').addEventListener('click',eventClick);
 el('stepContent').addEventListener('change',eventChange);
 el('stepContent').addEventListener('input',eventInput);
 el('stepContent').addEventListener('keydown',e=>{if(e.key==='Tab')return;});
 el('importJsonTop').addEventListener('click',()=>el('importJsonFile').click());
+el('updateCheckButton').addEventListener('click',checkUpdateAndDownload);
 el('importJsonFile').addEventListener('change',eventChange);
 el('prevStep').addEventListener('click',goBack);
 el('nextStep').addEventListener('click',advance);

@@ -1,8 +1,14 @@
-# MikroTik Auto Config Studio — Offline (v1.3.1)
+# MikroTik Auto Config Studio — Offline (v1.4.0)
 
 Công cụ **tạo lệnh cấu hình MikroTik RouterOS 7** theo từng bước Next → Xem lệnh → Sao chép → Dán vào Winbox. Chạy **offline** trên Windows bằng `index.html` hoặc `CHAY_PHAN_MEM.bat` (không cần cài Node.js).
 
-## Bổ sung v1.3.1 — PPPoE WAN tagged VLAN (802.1Q)
+## Mới trong v1.4.0 — Cập nhật trực tiếp từ ứng dụng
+- Trên giao diện có nút **↻ Kiểm tra cập nhật**. Khi nhấn, ứng dụng cần Internet để đọc phiên bản mới nhất tại GitHub Releases của repository chính thức. Nếu có bản mới, trình duyệt được yêu cầu **tự tải ZIP**; không cần vào trang GitHub để tìm link. Nếu lỗi mạng, mọi chức năng cấu hình vẫn dùng offline bình thường.
+- Giao diện **không tự ghi đè file đang chạy**: Chrome/Edge cấm trang `file://` tự sửa file trên máy. Nếu muốn cập nhật toàn bộ chương trình tại chỗ, nhấn đúp **`CAP_NHAT_TU_DONG.bat`** trong thư mục hiện tại. Windows PowerShell sẽ tải bản mới nhất, xác minh nguồn GitHub, kiểm tra SHA-256 nếu GitHub cung cấp, sao lưu mã nguồn rồi tự thay file và mở lại phần mềm.
+- Các file mẫu JSON/TXT/RSC của khách hàng không bị thay đổi. **Nên lưu mẫu JSON trước khi cập nhật** nếu đang chỉnh cấu hình dở. Cập nhật không cần quyền admin khi thư mục cho phép ghi.
+- Chỉ phần kiểm tra/tải bản mới cần mạng. Dữ liệu WAN, mật khẩu PPPoE, cấu hình khách hàng **không được gửi tới GitHub**.
+
+## Bổ sung v1.3.0 — PPPoE WAN tagged VLAN (802.1Q)
 - Từng WAN PPPoE phải chọn **trực tiếp trên cổng vật lý** hoặc **qua VLAN 802.1Q**. Mặc định là **chưa xác nhận**, chặn xuất lệnh đến khi người dùng xác nhận với nhà mạng.
 - Nếu chọn PPPoE tagged, nhập **VLAN ID do nhà mạng cung cấp (1–4094)**. Lệnh `/interface vlan add` tự đứng **trước** lệnh `/interface pppoe-client add`, client quay trên `vlan-WAN1`, `vlan-WAN2`, ... thay cho `ether1`/`ether2`.
 - Thay đổi loại PPPoE, port hoặc VLAN ID sẽ xóa trạng thái xác nhận để tránh dùng sai thông tin. VLAN WAN tách biệt module VLAN LAN ở bước 4.
@@ -30,6 +36,8 @@ Giải nén ZIP; mở `index.html` trên Edge/Chrome hoặc nhấn `CHAY_PHAN_ME
 ```bash
 node tests/test_core.js
 node tests/test_ui_smoke.js
+node tests/test_update.js
+node tests/test_update_ui.js
 ```
 
 ## Liên hệ

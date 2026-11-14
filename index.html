@@ -19,13 +19,13 @@
       <nav id="sideNav" aria-label="Các bước cấu hình"></nav>
       <div class="side-bottom">
         <div class="offline-box"><span class="status-dot"></span> Chạy offline • Không gửi dữ liệu đi đâu</div>
-        <div class="side-small">RouterOS 7 • No Default Config<br>Phiên bản <b id="sideVer">1.3.1</b></div>
+        <div class="side-small">RouterOS 7 • No Default Config<br>Phiên bản <b id="sideVer">1.4.0</b></div>
       </div>
     </aside>
     <main class="main-area">
       <header class="topbar">
         <div class="topbar-crumb"><span class="crumb-icon">▦</span> <span id="topCrumb">Thiết bị & bảo mật</span></div>
-        <div class="topbar-actions"><span class="mini-pill">RouterOS 7</span><button class="btn btn-ghost btn-small" id="importJsonTop" type="button">↥ Mở mẫu JSON</button><input type="file" id="importJsonFile" accept=".json,application/json" hidden></div>
+        <div class="topbar-actions"><span class="mini-pill">RouterOS 7</span><button class="btn btn-outline btn-small" id="updateCheckButton" type="button" title="Cần Internet để kiểm tra GitHub Releases">↻ Kiểm tra cập nhật</button><button class="btn btn-ghost btn-small" id="importJsonTop" type="button">↥ Mở mẫu JSON</button><input type="file" id="importJsonFile" accept=".json,application/json" hidden></div>
       </header>
       <div class="workspace">
         <div class="welcome"><div><div class="eyebrow">MỖI ROUTER • MỘT CẤU HÌNH CHÍNH XÁC</div><h1 id="pageTitle">Thiết bị & bảo mật</h1><p id="pageDesc">Thiết lập model MikroTik và cấu hình hệ thống cơ bản.</p></div><div class="step-marker" id="stepMarker">01 / 07</div></div>
@@ -36,8 +36,10 @@
       </div>
     </main>
   </div>
+  <div id="updatePanel" class="update-panel" role="status" aria-live="polite" hidden></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="core.js"></script>
+  <script src="update.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

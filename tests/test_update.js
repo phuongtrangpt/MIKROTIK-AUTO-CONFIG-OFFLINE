@@ -1,0 +1,36 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const U=require('../update.js');
+const repo='https://github.com/phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE/releases/download/';
+function release(tag,overrides={}){const name=`MikroTik_Auto_Config_Studio_${tag}_Windows_Offline.zip`;return {tag_name:tag,draft:false,prerelease:false,assets:[{name,size:15000,browser_download_url:repo+tag+'/'+name}],...overrides};}
+const s=U.parseRelease(release('v1.4.1'),'1.4.0');
+assert.deepEqual([s.state,s.version],['update','1.4.1']);
+assert.equal(s.url,repo+'v1.4.1/MikroTik_Auto_Config_Studio_v1.4.1_Windows_Offline.zip');
+assert.equal(U.parseRelease(release('v1.4.0'),'1.4.0').state,'current');
+assert.equal(U.parseRelease(release('v1.3.1'),'1.4.0').state,'current');
+assert.equal(U.compareVersions('1.10.0','1.9.99'),1);
+assert.equal(U.compareVersions('v1.4.0','1.4.0'),0);
+assert.throws(()=>U.parseRelease(release('v1.4.1',{draft:true}),'1.4.0'),/ổn định/);
+assert.throws(()=>U.parseRelease(release('v1.4.1',{prerelease:true}),'1.4.0'),/ổn định/);
+assert.throws(()=>U.parseRelease(release('1.4.1'),'1.4.0'),/Tag/);
+assert.throws(()=>U.parseRelease(release('v1.4.1',{assets:[]}), '1.4.0'),/ZIP/);
+const malicious=release('v1.4.1');malicious.assets[0].browser_download_url='https://attacker.example/file.zip';
+assert.throws(()=>U.parseRelease(malicious,'1.4.0'),/ZIP/);
+assert.equal(U.API_URL,'https://api.github.com/repos/phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE/releases/latest');
+(async()=>{
+ let calls=0;
+ const check=await U.checkLatest('1.4.0',async(url,opts)=>{calls++;assert.equal(url,U.API_URL);assert.equal(opts.method,'GET');return {ok:true,json:async()=>release('v1.4.1')};});
+ assert.equal(check.state,'update');assert.equal(calls,1);
+ await assert.rejects(U.checkLatest('1.4.0',async()=>({ok:false,status:403})),/giới hạn/);
+ await assert.rejects(U.checkLatest('1.4.0',async()=>{throw new Error('offline');}),/Internet/);
+ const index=fs.readFileSync(path.resolve(__dirname,'../index.html'),'utf8');
+ assert.match(index,/id="updateCheckButton"/);
+ assert.match(index,/src="update.js"/);
+ const ps1=fs.readFileSync(path.resolve(__dirname,'../CAP_NHAT_TU_DONG.ps1'),'utf8');
+ assert.match(ps1,/backup_v/);
+ assert.match(ps1,/Get-FileHash/);
+ assert.match(ps1,/releases\/latest/);
+ console.log('PASS GitHub release update check, trust-bound asset URLs and Windows updater packaging');
+})().catch(e=>{console.error(e);process.exitCode=1});

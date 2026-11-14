@@ -36,3 +36,14 @@
 .contact-links{display:flex;flex-wrap:wrap;gap:9px}
 .contact-links a{background:white;color:#245fc7;font-weight:700;text-decoration:none;border:1px solid #d6e4fa;border-radius:9px;padding:7px 12px}
 .contact-links a:hover{background:#eaf2ff}
+
+/* v1.4.0 — Trạng thái kiểm tra & cập nhật phiên bản */
+.update-panel{position:fixed;z-index:180;top:74px;right:24px;width:min(410px,calc(100vw - 30px));max-height:calc(100vh - 110px);overflow-y:auto;background:#fff;border:1px solid #d8e5fa;border-radius:16px;padding:19px 20px;box-shadow:0 15px 55px #14243b35;color:#24405b;font-size:13px;line-height:1.65}
+.update-panel[hidden]{display:none!important}
+.update-title{display:flex;gap:9px;align-items:center;justify-content:space-between;font-weight:800;color:#193c70;font-size:15px}
+.update-title button{border:0;background:transparent;color:#6b7f9c;padding:2px 7px;cursor:pointer;font-size:20px}
+.update-panel p{margin:9px 0}
+.update-panel .btn-row{margin:12px 0 0;gap:8px;flex-wrap:wrap}
+.update-panel .note{background:#f3f7fd;border-radius:8px;padding:9px;color:#4c6689;font-size:12px;margin-top:12px}
+#updateCheckButton:disabled{opacity:.65;cursor:wait}
+@media(max-width:750px){.update-panel{top:64px;right:12px}.topbar-actions{gap:5px}.topbar-actions .btn{padding:7px 9px;font-size:11px}}

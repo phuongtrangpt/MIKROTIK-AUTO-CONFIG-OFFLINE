@@ -1,4 +1,4 @@
-MIKROTIK AUTO CONFIG STUDIO v1.3.1 — WINDOWS OFFLINE
+MIKROTIK AUTO CONFIG STUDIO v1.4.0 — WINDOWS OFFLINE
 RouterOS 7 | No Default Configuration | Next / Copy / Skip
 ==========================================================
 
@@ -40,3 +40,9 @@ Dien thoai: 0963839369
 Facebook: https://www.facebook.com/leviethoaiphuong/
 
 WAN PPPoE VLAN 802.1Q (v1.3.1): Hoi ISP PPPoE truc tiep hay tagged, VLAN ID neu can. Phai check "Da xac nhan". Neu tagged, tool tu tao /interface vlan truoc PPPoE Client.
+
+AUTO UPDATE v1.4.0
+- Tren giao dien bam "Kiem tra cap nhat" khi co Internet: tu tim ZIP Release moi nhat va yeu cau trinh duyet tai ve.
+- De TU CAI DAT: dong tab cu, bam CAP_NHAT_TU_DONG.bat ngay trong thu muc dang chay; PowerShell download, backup va thay code.
+- Khong can cai Node.js/Python, khong upload script/mat khau.
+- File mau JSON/RSC/TXT khong bi sua; nen luu JSON neu dang lam viec do.

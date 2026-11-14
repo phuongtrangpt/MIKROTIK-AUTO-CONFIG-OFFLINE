@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (example: v1.3.1)'
+        description: 'Version to publish (example: v1.4.0)'
         required: true
-        default: 'v1.3.1'
+        default: 'v1.4.0'
 
 permissions:
   contents: write
@@ -28,7 +28,7 @@ jobs:
           REQUESTED_VERSION: ${{ inputs.version }}
         shell: bash
         run: |
-          VERSION="${REQUESTED_VERSION:-v1.3.1}"
+          VERSION="${REQUESTED_VERSION:-v1.4.0}"
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid version: $VERSION" >&2
             exit 1
@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/MikroTik_Auto_Config_Studio
-          cp index.html app.js core.js style.css README.md README.txt CHANGELOG.txt CHAY_PHAN_MEM.bat dist/MikroTik_Auto_Config_Studio/
+          cp index.html app.js core.js update.js style.css README.md README.txt CHANGELOG.txt CHAY_PHAN_MEM.bat CAP_NHAT_TU_DONG.bat CAP_NHAT_TU_DONG.ps1 dist/MikroTik_Auto_Config_Studio/
           cp -r tests dist/MikroTik_Auto_Config_Studio/
           (
             cd dist
@@ -72,12 +72,12 @@ jobs:
           - Nhập băng thông từng WAN, tự tính tỷ lệ PCC (ví dụ 250M + 1G = 1:4).
           - Chọn cổng Bridge LAN thủ công; PPPoE Server trên Bridge LAN, Bridge riêng hoặc VLAN.
           - Giao diện tiếng Việt, hoạt động offline trên Windows, không cần cài Node.js.
-          - v1.3.1: cập nhật tên hiển thị tác giả thành Việt Phương.
+          - v1.4.0: cập nhật tên hiển thị tác giả thành Việt Phương.
           - Liên hệ hỗ trợ: Việt Phương — 0963839369 — https://www.facebook.com/leviethoaiphuong/
 
           **Cách sử dụng:** Tải file ZIP trong Assets, giải nén, chạy `CHAY_PHAN_MEM.bat` hoặc mở `index.html`.
 
-          **An toàn:** Chỉ dùng với RouterOS 7 No Default Configuration; cần thử trên router dự phòng trước khi triển khai. Script xuất ra có thể chứa mật khẩu PPPoE.
+          **Cập nhật lần sau:** Nhấn Kiểm tra cập nhật trong giao diện để tự tải ZIP, hoặc chạy `CAP_NHAT_TU_DONG.bat` để tự cập nhật ứng dụng trên Windows.\n\n          **An toàn:** Chỉ dùng với RouterOS 7 No Default Configuration; cần thử trên router dự phòng trước khi triển khai. Script xuất ra có thể chứa mật khẩu PPPoE.
           NOTES
           if gh release view "$VERSION" >/dev/null 2>&1; then
             gh release upload "$VERSION" "$ASSET" --clobber
