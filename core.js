@@ -28,7 +28,7 @@
       ],
       lan: { portMode:'all', selectedPorts:[], gateway: '192.168.1.1/24', dhcp: true, poolStart: '',poolEnd:'',lease:'1d',interVlan:false },
       vlans: [],
-      wireguard:{role:'remote',name:'wg-studio',address:'',listenPort:'51820',networks:'',peers:[]},
+      wireguard:{role:'remote',name:'wg-studio',address:'',listenPort:'51820',networks:'',winbox:false,peers:[]},
       qos: {enabled:false,upload:'100M',download:'500M'},
       ppp: {enabled:false,mode:'bridge',port:'ether8',ports:[],vlanId:'',sharedBridgeConfirmed:false,service:'MIKROTIK-PPPOE',gateway:'10.20.0.1',network:'10.20.0.0/24',poolStart:'10.20.0.10',poolEnd:'10.20.0.250',usersText:''}
     };

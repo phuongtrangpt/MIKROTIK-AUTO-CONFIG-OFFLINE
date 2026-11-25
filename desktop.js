@@ -47,6 +47,7 @@ window.MTDesktop = {
         </div>
         <div class="field"><label for="studioVpnNetworks">LAN/VLAN được truy cập (phân cách bằng dấu phẩy)</label><input id="studioVpnNetworks" placeholder="192.168.1.0/24"></div>
         <div id="studioVpnPeers"></div>
+        <label class="checkrow"><input id="studioVpnWinbox" type="checkbox"> Cho phép WinBox từ IP đường hầm của các peer</label>
         <div class="btn-row">
           <button id="studioVpnAdd" class="btn btn-outline">Thêm peer</button>
           <button id="studioVpnRender" class="btn btn-primary">Sinh script .RSC</button>
@@ -178,6 +179,7 @@ window.MTDesktop = {
     const vpnFields = {role:'Role',name:'Name',address:'Ip',listenPort:'Port',networks:'Networks'};
     function readWireGuard() {
       const config = Object.fromEntries(Object.entries(vpnFields).map(([key,id]) => [key,byId('studioVpn'+id).value.trim()]));
+      config.winbox = byId('studioVpnWinbox').checked;
       config.peers = Array.from(vpnPeers.children, row => Object.fromEntries(
         Array.from(row.querySelectorAll('[data-peer]'), input => [input.dataset.peer,input.value.trim()])));
       return config;
@@ -208,6 +210,7 @@ window.MTDesktop = {
     button('desktopVpn', 'WireGuard').onclick = () => {
       const config = state().wireguard;
       for (const [key,id] of Object.entries(vpnFields)) byId('studioVpn'+id).value = config[key];
+      byId('studioVpnWinbox').checked = config.winbox;
       vpnPeers.replaceChildren();
       for (const peer of config.peers.length ? config.peers : [{}]) addPeer(peer);
       vpnOutput.hidden = true;
@@ -333,9 +336,11 @@ window.MTDesktop = {
         controls.forEach(control => control.disabled = false);
       }
     };
-    dialog.addEventListener('close', () => {
+    function clearCredentials() {
       for (const id of ['studioPassword','studioBackupPassword','studioPppPassword']) byId(id).value = '';
-    });
+    }
+    dialog.querySelector('.studio-close').addEventListener('submit', clearCredentials);
+    dialog.addEventListener('close', clearCredentials);
     const update = byId('updateCheckButton');
     update.hidden = true;
     const panel = byId('updatePanel');

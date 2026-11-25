@@ -423,4 +423,94 @@ mod tests {
         );
         worker.join().unwrap();
     }
+    #[test]
+    #[ignore = "run through tests/api_tls.sh with a disposable CA"]
+    fn api_ssl_validates_identity_and_saves_encrypted_backup() {
+        use native_tls::{Identity, TlsAcceptor};
+        let pem = std::fs::read_to_string(std::env::var("STUDIO_TEST_CA").unwrap()).unwrap();
+        let pkcs12 = std::fs::read(std::env::var("STUDIO_TEST_PKCS12").unwrap()).unwrap();
+        let acceptor =
+            TlsAcceptor::new(Identity::from_pkcs12(&pkcs12, "lab-only").unwrap()).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let worker = thread::spawn(move || {
+            let (bad, _) = listener.accept().unwrap();
+            bad.set_read_timeout(Some(TIMEOUT)).unwrap();
+            assert!(acceptor.accept(bad).is_err());
+
+            let (good, _) = listener.accept().unwrap();
+            good.set_read_timeout(Some(TIMEOUT)).unwrap();
+            let mut stream = acceptor.accept(good).unwrap();
+            for (expected, reply) in [
+                (vec!["/login", "=name=lab", "=password=temporary"], vec![]),
+                (
+                    vec!["/file/print", "=.proplist=name", "?name=lab.backup"],
+                    vec![],
+                ),
+                (
+                    vec![
+                        "/system/backup/save",
+                        "=name=lab",
+                        "=password=test-only-backup",
+                        "=dont-encrypt=no",
+                        "=encryption=aes-sha256",
+                    ],
+                    vec![],
+                ),
+                (
+                    vec!["/file/print", "=.proplist=name", "?name=lab.backup"],
+                    vec!["!re", "=name=lab.backup"],
+                ),
+            ] {
+                assert_eq!(codec::receive(&mut stream).unwrap(), expected);
+                if !reply.is_empty() {
+                    codec::send(&mut stream, &reply).unwrap();
+                }
+                codec::send(&mut stream, &["!done"]).unwrap();
+            }
+        });
+        let mut connection = Connection {
+            host: "127.0.0.1".into(),
+            port,
+            username: "lab".into(),
+            password: "temporary".into(),
+            tls: true,
+            tls_name: "wrong.studio.test".into(),
+            ca_pem: pem,
+        };
+        let backup = Backup {
+            name: "lab".into(),
+            password: "test-only-backup".into(),
+        };
+        assert!(save_backup(&connection, &backup)
+            .unwrap_err()
+            .contains("chứng chỉ"));
+        connection.tls_name = "router.studio.test".into();
+        assert_eq!(save_backup(&connection, &backup).unwrap(), "lab.backup");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn rejects_mutation_over_plaintext_api() {
+        let connection = Connection {
+            host: "127.0.0.1".into(),
+            port: 0,
+            username: String::new(),
+            password: String::new(),
+            tls: false,
+            tls_name: String::new(),
+            ca_pem: String::new(),
+        };
+        let subscriber = Subscriber {
+            id: None,
+            name: "lab".into(),
+            password: "fake".into(),
+            profile: "test".into(),
+            comment: String::new(),
+            disabled: false,
+        };
+        assert!(save_subscriber(&connection, &subscriber)
+            .unwrap_err()
+            .contains("API-SSL"));
+    }
 }

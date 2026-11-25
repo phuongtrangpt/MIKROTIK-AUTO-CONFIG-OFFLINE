@@ -109,6 +109,16 @@
       output.push('/ip firewall filter add chain=input action=accept in-interface='+q(wanInterface)+
         ' protocol=udp dst-port='+Number(listenPort)+' place-before=[find where comment="Bootstrap block WAN management"]');
     }
+    if (config.winbox === true) {
+      const peers = entries.map(entry => entry.peer.ip+'/32');
+      const sources = name+'-mgmt';
+      output.push(':if ([:len [/ip firewall filter find where comment="Drop all other input"]] != 1) do={ :error "Studio input firewall missing" }');
+      for (const address of peers) output.push('/ip firewall address-list add list='+q(sources)+' address='+address);
+      output.push('/ip firewall filter add chain=input action=accept in-interface='+q(name)+
+        ' src-address-list='+q(sources)+' protocol=tcp dst-port=8291 place-before=[find where comment="Drop all other input"]');
+      output.push(':local studioWinbox [/ip service get winbox address]; :if ([:len $studioWinbox] > 0) do={ '+
+        '/ip service set winbox address=($studioWinbox,[:toarray '+q(peers.join(','))+']) }');
+    }
     for (const network of allowed) {
       output.push('/ip firewall filter add chain=forward action=accept in-interface='+q(name)+
         ' out-interface-list=LAN dst-address='+network.cidr+' place-before=[find where comment="Default deny forward"]');

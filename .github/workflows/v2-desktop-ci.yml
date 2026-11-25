@@ -46,3 +46,18 @@ jobs:
           echo 'dbb8f1739da73a68e5167fcbc731a5ba3d50f9d9b195731b96f96fcc58904580  /tmp/chr.zip' | sha256sum --check
           unzip -q /tmp/chr.zip -d /tmp
       - run: python3 -u tests/chr/smoke.py /tmp/chr-7.21.5.img
+  desktop-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bash tests/api_tls.sh
+      - run: pip install 'playwright>=1.56,<2'
+      - run: node scripts/prepare-desktop.cjs
+      - run: python tests/desktop_ui.py --chromium "$(command -v google-chrome)"

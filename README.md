@@ -1,5 +1,33 @@
 # MikroTik Auto Config Studio — Offline (v1.5.0)
 
+## Desktop v2.0.0-alpha.1
+
+Nhánh `develop/v2-tauri` xây dựng ứng dụng Windows bằng Tauri 2 và Rust. Bộ cài thử nghiệm nằm trong mục **Artifacts** của workflow [V2 desktop CI](https://github.com/phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE/actions/workflows/v2-desktop-ci.yml). Trình hướng dẫn trên `index.html` vẫn chạy được offline trên trình duyệt. Các tính năng desktop xuất hiện trong bộ cài.
+
+- **Dự án** lưu mẫu trên máy. Mẫu và tệp JSON bỏ mật khẩu WAN cùng danh sách tài khoản PPPoE. Tệp script .RSC chứa mật khẩu PPPoE mà RouterOS cần khi nhập lệnh.
+- **RouterOS** đọc thông tin hệ thống và danh sách thuê bao. API-SSL kiểm tra tên trên chứng chỉ bằng kho chứng chỉ hệ điều hành hoặc CA PEM được cung cấp. Thay đổi thuê bao và sao lưu mã hóa đều yêu cầu API-SSL. Bật dịch vụ API qua WinBox trên mạng quản trị, giới hạn IP nguồn tại dịch vụ và firewall. RouterOS giữ tệp `.backup` trong **Files**.
+- **Áp dụng và khôi phục** xuất .RSC cho RouterOS 7 trống. Có thể kiểm tra bằng `/import file-name=<ten.rsc> verbose=yes dry-run`. Khi chỉnh router đang chạy, dùng Safe Mode trong WinBox hoặc Ctrl+X trong Terminal, thực hiện theo từng nhóm lệnh nhỏ và kiểm tra bằng phiên quản trị thứ hai trước khi xác nhận. Để phục hồi toàn bộ, mở **Files** trên đúng router gốc và chọn **Restore** với mật khẩu sao lưu.
+- **WAN** mỗi đường có thể khai báo một IP giám sát riêng. Với DHCP + giám sát, script cập nhật route /32 khi địa chỉ thuê thay đổi. Chọn đích phản hồi ICMP ổn định qua đúng nhà mạng. WinBox từ WAN là lựa chọn riêng, có thể giới hạn theo IP/CIDR nguồn.
+- **WireGuard** xuất cấu hình RouterOS cho Remote Access, Hub hoặc Site-to-Site. Chạy script sau cấu hình cơ sở. Remote Access và Hub nghe trên WAN 1. Điền public key của các peer vào ứng dụng, rồi lấy public key của router bằng `/interface wireguard print` để cấu hình máy khách hoặc chi nhánh. Cấu hình chi nhánh dạng Site-to-Site đặt endpoint là IP hoặc DNS của Hub và dùng IP VPN cùng subnet.
+
+### Chạy kiểm thử
+
+```sh
+node --test tests/*.js tests/*.cjs
+cargo test --manifest-path src-tauri/routeros/Cargo.toml
+node scripts/prepare-desktop.cjs
+python3 tests/chr/smoke.py /duong-dan/chr-7.21.5.img
+```
+
+Trên Windows, dựng bộ cài bằng `npx --yes --package @tauri-apps/cli@2 tauri build --bundles nsis`. CI chạy mô phỏng CHR bằng QEMU trên một đĩa dùng một lần.
+
+### Kênh cập nhật thử nghiệm
+
+Workflow **Publish signed V2 Windows preview** chỉ chạy thủ công trên nhánh v2 sau khi cùng commit vượt qua Windows và CHR CI. Kênh thử nghiệm dùng prerelease riêng `v2-desktop-preview`. Thiết lập biến `STUDIO_UPDATER_PUBLIC_KEY`, secret `TAURI_SIGNING_PRIVATE_KEY` và secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` nếu khóa có mật khẩu. Các bản kiểm thử CI thông thường được dựng với cập nhật tắt. Bản có khóa công khai kiểm tra phiên bản khi mở ứng dụng và xác minh chữ ký trước khi cài.
+
+---
+
+
 Công cụ **tạo lệnh cấu hình MikroTik RouterOS 7** theo từng bước Next → Xem lệnh → Sao chép → Dán vào Winbox. Chạy **offline** trên Windows bằng `index.html` hoặc `CHAY_PHAN_MEM.bat` (không cần cài Node.js).
 
 ## v1.5.0 — Rà soát bộ sinh script RouterOS 7 và an toàn triển khai
@@ -14,7 +42,7 @@ Công cụ **tạo lệnh cấu hình MikroTik RouterOS 7** theo từng bước 
 - Khi mở lại JSON, bắt buộc xác nhận lại thông số PPPoE với nhà mạng. Bước cuối có nút **Sao chép lệnh kiểm tra (chỉ đọc)**.
 - Bổ sung kiểm thử lõi, kiểm thử 9 tổ hợp hai WAN PPPoE/DHCP/Static, VLAN, PPPoE Server, PCQ, chuỗi ký tự đặc biệt và cập nhật Windows.
 
-**Giới hạn kiểm thử:** Kiểm thử Node.js và quy tắc sinh lệnh không thay thế thử chạy trên MikroTik thật. Để xác minh cú pháp RouterOS 7.16+ trước khi triển khai, có thể tải file `.rsc` lên router lab rồi dùng `import file-name=ten_file.rsc verbose=yes dry-run=yes` để kiểm tra mà chưa thay đổi cấu hình. Luôn giữ Safe Mode và sao lưu; không áp dụng script tổng lên router đã cấu hình.
+**Giới hạn kiểm thử:** Kiểm thử Node.js và quy tắc sinh lệnh không thay thế thử chạy trên MikroTik thật. Để xác minh cú pháp RouterOS 7.16+ trước khi triển khai, có thể tải file `.rsc` lên router lab rồi dùng `import file-name=ten_file.rsc verbose=yes dry-run` để kiểm tra mà chưa thay đổi cấu hình. Luôn giữ Safe Mode và sao lưu; không áp dụng script tổng lên router đã cấu hình.
 
 ## v1.4.1 — Sửa lỗi cập nhật Windows ở đường dẫn có dấu cách/ngoặc
 - Sửa lỗi `Resolve-Path : Illegal characters in path` khi chạy `CAP_NHAT_TU_DONG.bat` ở các thư mục như `New folder (29)`.
