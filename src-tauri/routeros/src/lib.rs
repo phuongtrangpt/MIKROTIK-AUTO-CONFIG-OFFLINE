@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     io::{self, Read, Write},
-    net::{IpAddr, SocketAddr, TcpStream},
+    net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs},
     time::{Duration, Instant},
 };
 use zeroize::ZeroizeOnDrop;
@@ -132,12 +132,72 @@ fn request(stream: &mut (impl Read + Write), words: &[&str]) -> Result<Vec<Row>>
     Err("Phản hồi RouterOS vượt giới hạn số dòng.".into())
 }
 
+fn normalized_host(value: &str) -> Option<String> {
+    let host = value.trim();
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Some(ip.to_string());
+    }
+    if let Some(inner) = host.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+        return inner
+            .parse::<std::net::Ipv6Addr>()
+            .ok()
+            .map(|ip| ip.to_string());
+    }
+    let name = host.strip_suffix('.').unwrap_or(host);
+    let valid = !name.is_empty()
+        && name.len() <= 253
+        && name.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        });
+    valid.then(|| name.to_ascii_lowercase())
+}
+
+fn connect(host: &str, port: u16) -> Result<TcpStream> {
+    let targets: Vec<SocketAddr> = match host.parse::<IpAddr>() {
+        Ok(ip) => vec![SocketAddr::new(ip, port)],
+        Err(_) => (host, port).to_socket_addrs()
+            .map_err(|_| "Không phân giải được tên DNS. Kiểm tra DNS Name trong IP → Cloud hoặc kết nối mạng.")?
+            .collect(),
+    };
+    if targets.is_empty() {
+        return Err("Tên DNS chưa có địa chỉ IP.".to_owned());
+    }
+    let deadline = Instant::now() + TIMEOUT;
+    let last = targets.len() - 1;
+    let mut last_error = io::Error::from(io::ErrorKind::TimedOut);
+    for (index, target) in targets.into_iter().enumerate() {
+        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+            break;
+        };
+        if remaining.is_zero() {
+            break;
+        }
+        // A stale or unreachable first record must leave time for the other addresses.
+        let timeout = if index == last {
+            remaining
+        } else {
+            remaining.min(Duration::from_secs(3))
+        };
+        match TcpStream::connect_timeout(&target, timeout) {
+            Ok(socket) => return Ok(socket),
+            Err(error) => last_error = error,
+        }
+    }
+    Err(format!(
+        "Không mở được TCP cổng {port} ({:?}). Kiểm tra IP → Services và firewall RouterOS.",
+        last_error.kind()
+    ))
+}
+
 fn open(connection: &Connection) -> Result<TimedStream> {
-    let ip: IpAddr = connection
-        .host
-        .trim()
-        .parse()
-        .map_err(|_| "Nhập địa chỉ IP của router.")?;
+    let host = normalized_host(&connection.host)
+        .ok_or("Nhập IP hoặc tên DNS của router. Điền cổng ở ô riêng.")?;
     if connection.port == 0
         || connection.username.is_empty()
         || connection.username.len() > 128
@@ -146,8 +206,13 @@ fn open(connection: &Connection) -> Result<TimedStream> {
     {
         return Err("Thông tin kết nối không hợp lệ.".into());
     }
-    let socket = TcpStream::connect_timeout(&SocketAddr::new(ip, connection.port), TIMEOUT)
-        .map_err(io_error)?;
+    let tls_name = if connection.tls && !connection.tls_name.trim().is_empty() {
+        normalized_host(&connection.tls_name)
+            .ok_or("Tên trên chứng chỉ phải là IP hoặc tên DNS.")?
+    } else {
+        host.clone()
+    };
+    let socket = connect(&host, connection.port)?;
     socket.set_read_timeout(Some(TIMEOUT)).map_err(io_error)?;
     socket.set_write_timeout(Some(TIMEOUT)).map_err(io_error)?;
     let stream: Box<dyn Transport> = if connection.tls {
@@ -158,26 +223,10 @@ fn open(connection: &Connection) -> Result<TimedStream> {
                 .map_err(|_| "Chứng chỉ CA PEM không hợp lệ.")?;
             builder.add_root_certificate(certificate);
         }
-        let tls_name = if connection.tls_name.trim().is_empty() {
-            connection.host.trim()
-        } else {
-            connection.tls_name.trim()
-        };
-        let tls = builder
-            .build()
-            .and_then(|connector| {
-                connector
-                    .connect(tls_name, socket)
-                    .map_err(|err| match err {
-                        native_tls::HandshakeError::Failure(err) => err,
-                        native_tls::HandshakeError::WouldBlock(_) => {
-                            unreachable!("socket is blocking")
-                        }
-                    })
-            })
-            .map_err(|_| {
-                "API-SSL không xác minh được chứng chỉ hoặc phiên TLS. Kiểm tra tên và CA."
-            })?;
+        let connector = builder.build().map_err(|_| "Không khởi tạo được TLS.")?;
+        let tls = connector.connect(&tls_name, socket).map_err(|_| {
+            "API-SSL không bắt tay được. Kiểm tra chứng chỉ đã gán cho api-ssl, tên DNS trên chứng chỉ và CA."
+        })?;
         Box::new(tls)
     } else {
         Box::new(socket)
@@ -387,6 +436,27 @@ mod tests {
     use std::{net::TcpListener, thread};
 
     #[test]
+    fn accepts_dns_and_literal_addresses_without_url_or_port() {
+        for (input, expected) in [
+            (" ABC.SN.Mynetname.Net. ", "abc.sn.mynetname.net"),
+            ("192.168.88.1", "192.168.88.1"),
+            ("[2001:db8::1]", "2001:db8::1"),
+        ] {
+            assert_eq!(normalized_host(input).as_deref(), Some(expected));
+        }
+        for input in [
+            "https://router.test",
+            "router.test:8729",
+            "r..test",
+            "-router.test",
+            "r.test/a",
+            "",
+        ] {
+            assert!(normalized_host(input).is_none(), "{input}");
+        }
+    }
+
+    #[test]
     fn done_can_return_the_new_item_id() {
         let transact = |command: &str| {
             let mut exchange = Vec::new();
@@ -483,7 +553,7 @@ mod tests {
             }
         });
         let mut connection = Connection {
-            host: "127.0.0.1".into(),
+            host: "localhost".into(),
             port,
             username: "lab".into(),
             password: "temporary".into(),
@@ -498,7 +568,7 @@ mod tests {
         assert!(save_backup(&connection, &backup)
             .unwrap_err()
             .contains("chứng chỉ"));
-        connection.tls_name = "router.studio.test".into();
+        connection.tls_name.clear();
         assert_eq!(save_backup(&connection, &backup).unwrap(), "lab.backup");
         worker.join().unwrap();
     }

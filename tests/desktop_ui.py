@@ -19,9 +19,9 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
         page.on('dialog',lambda dialog:dialog.accept())
         page.add_init_script("""window.__TAURI__ = {core:{invoke:async (cmd,args)=>{
           if(cmd==='update_available') return true;
-          if(cmd==='update_check') return '2.0.0-alpha.3';
+          if(cmd==='update_check') return '2.0.0-alpha.4';
           if(cmd==='update_install'){ args.progress.onmessage({downloaded:10,total:10}); return; }
-          if(cmd==='router_info') return {identity:'LAB-RB5009',version:'7.21.5',board:'CHR',uptime:'1h'};
+          if(cmd==='router_info' && args.connection.host==='router.sn.mynetname.net' && args.connection.tlsName==='' && args.connection.caPem.includes('BEGIN CERTIFICATE')) return {identity:'LAB-RB5009',version:'7.21.5',board:'CHR',uptime:'1h'};
           if(cmd==='ppp_subscribers') return [{'.id':'*1',name:'lab',profile:'lab-plan',disabled:'false'}];
           if(cmd==='ppp_profiles') return ['lab-plan'];
           if(cmd==='ppp_save') return;
@@ -29,7 +29,7 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
           throw new Error(cmd);
         },Channel:class {}}};""")
         page.goto(f'http://127.0.0.1:{server.server_port}/')
-        assert page.locator('#sideVer').inner_text()=='2.0.0-alpha.2'
+        assert page.locator('#sideVer').inner_text()=='2.0.0-alpha.3'
         page.locator('#desktopTheme').click()
         assert page.locator('html').get_attribute('data-theme')=='dark'
         page.locator('#studioUpdateClose').click()
@@ -40,11 +40,19 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
         page.locator('.studio-close button').click()
         page.context.grant_permissions(['clipboard-read','clipboard-write'])
         page.locator('#desktopRouter').click()
-        page.locator('#studioHost').fill('192.168.1.1')
+        page.locator('#studioHost').fill('router.sn.mynetname.net')
+        page.locator('#studioCaFile').set_input_files({'name':'studio-ca.crt','mimeType':'text/plain',
+            'buffer':b'-----BEGIN CERTIFICATE-----\nYWJj\n-----END CERTIFICATE-----'})
+        page.wait_for_function("document.querySelector('#studioCa').value.includes('BEGIN CERTIFICATE')")
         page.locator('#studioUser').fill('admin')
         page.locator('#studioPassword').fill('test-only-router-secret')
         page.get_by_role('button',name='Kiểm tra kết nối').click()
         assert 'LAB-RB5009' in page.locator('#studioRouterStatus').inner_text()
+        page.locator('#studioTls').uncheck()
+        page.get_by_role('button',name='Xem thuê bao PPPoE').click()
+        assert page.locator('#studioPlainHint').is_visible()
+        assert page.get_by_role('button',name='Sửa').count() == 0
+        page.locator('#studioTls').check()
         page.get_by_role('button',name='Xem thuê bao PPPoE').click()
         page.get_by_role('button',name='Sửa').click()
         page.locator('#studioPppDisabled').check()

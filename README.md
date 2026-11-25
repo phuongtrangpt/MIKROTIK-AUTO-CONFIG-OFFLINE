@@ -1,6 +1,6 @@
 # MikroTik Auto Config Studio — Offline (v1.5.0)
 
-## Desktop v2.0.0-alpha.2
+## Desktop v2.0.0-alpha.3
 
 Nhánh `develop/v2-tauri` xây dựng ứng dụng Windows bằng Tauri 2 và Rust. Bộ cài thử nghiệm nằm trong mục **Artifacts** của workflow [V2 desktop CI](https://github.com/phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE/actions/workflows/v2-desktop-ci.yml). Trình hướng dẫn trên `index.html` vẫn chạy được offline trên trình duyệt. Các tính năng desktop xuất hiện trong bộ cài.
 
@@ -9,6 +9,25 @@ Nhánh `develop/v2-tauri` xây dựng ứng dụng Windows bằng Tauri 2 và Ru
 - **Áp dụng và khôi phục** xuất .RSC cho RouterOS 7 trống. Có thể kiểm tra bằng `/import file-name=<ten.rsc> verbose=yes dry-run`. Khi chỉnh router đang chạy, dùng Safe Mode trong WinBox hoặc Ctrl+X trong Terminal, thực hiện theo từng nhóm lệnh nhỏ và kiểm tra bằng phiên quản trị thứ hai trước khi xác nhận. Mục **Hẹn tự khôi phục** tạo lệnh đặt lịch trên router. Xác nhận bằng cùng tài khoản sau khi thử phiên quản trị mới để giữ cấu hình. Khi hết thời hạn mà chưa xác nhận, router khôi phục bản sao lưu tạm và khởi động lại. Dùng tính năng khi router tiếp tục chạy. Để phục hồi thủ công, mở **Files** trên đúng router gốc và chọn **Restore** với mật khẩu sao lưu.
 - **WAN** mỗi đường có thể khai báo một IP giám sát riêng. Với DHCP + giám sát, script cập nhật route /32 khi địa chỉ thuê thay đổi. Chọn đích phản hồi ICMP ổn định qua đúng nhà mạng. WinBox từ WAN là lựa chọn riêng, có thể giới hạn theo IP/CIDR nguồn.
 - **WireGuard** xuất cấu hình RouterOS cho Remote Access, Hub hoặc Site-to-Site. Chạy script sau cấu hình cơ sở. Remote Access và Hub nghe trên WAN 1. Điền public key của các peer vào ứng dụng, rồi lấy public key của router bằng `/interface wireguard print` để cấu hình máy khách hoặc chi nhánh. Cấu hình chi nhánh dạng Site-to-Site đặt endpoint là IP hoặc DNS của Hub và dùng IP VPN cùng subnet.
+
+### Kết nối từ xa bằng MikroTik Cloud và API-SSL
+
+1. Trong **WinBox → IP → Cloud**, bật **DDNS Enabled** và sao chép **DNS Name**. Ví dụ `router.sn.mynetname.net`. Kiểm tra ngày giờ RouterOS trước khi cấp chứng chỉ. Tên Cloud tự theo IP công cộng, còn TCP 8729 vẫn cần đường kết nối vào router. Nếu đang ở sau CGNAT, dùng kết nối quản trị qua WireGuard hoặc Back To Home.
+2. Nếu router đã có chứng chỉ máy chủ còn hạn, kiểm tra trường **Subject Alt. Name** có `DNS:<DNS Name>` và chứng chỉ có khóa riêng trên router. Nếu chưa có, thay `router.sn.mynetname.net` ở cả hai chỗ sau bằng tên Cloud của anh. Mở **Terminal** trong WinBox và chạy từng lệnh theo thứ tự. Dùng tên chứng chỉ riêng nếu các tên này đã tồn tại.
+
+   ```routeros
+   /certificate add name=studio-api-ca common-name="Studio API CA" days-valid=3650 key-usage=key-cert-sign,crl-sign
+   /certificate sign studio-api-ca
+   /certificate add name=studio-api-tls common-name=router.sn.mynetname.net subject-alt-name=DNS:router.sn.mynetname.net days-valid=365 key-usage=digital-signature,key-encipherment,tls-server
+   /certificate sign studio-api-tls ca=studio-api-ca
+   /certificate export-certificate studio-api-ca type=pem file-name=studio-api-ca
+   ```
+
+3. Trong **IP → Services → api-ssl**, bật dịch vụ, chọn **Certificate** là `studio-api-tls` và dùng **Port** `8729`. Đặt **Available From** là IP công cộng của máy quản trị (dạng `/32` với IPv4), hoặc subnet quản trị nếu đi qua VPN. Trong **IP → Firewall → Filter Rules**, xác nhận chain `input` cho phép TCP 8729 từ đúng nguồn quản trị. Nếu cần thêm rule thì đặt trước rule chặn tương ứng, giới hạn nguồn và chọn đúng interface WAN hoặc VPN. Dùng Safe Mode khi sửa firewall từ xa.
+4. Trong **Files**, tải `studio-api-ca.crt` về. Mở **RouterOS** trong app, điền DNS Name vào **IP hoặc DNS MikroTik Cloud**, đặt cổng `8729` và bật **Dùng API-SSL**. Để trống **Tên trên chứng chỉ** nếu nó trùng DNS Name. Chọn tệp `.crt` ở **CA nội bộ**. Chỉ cần tệp CA công khai. Nếu chứng chỉ đã được Windows tin cậy, có thể bỏ qua bước nạp CA. Khi truy cập qua VPN bằng IP nội bộ, có thể nhập IP VPN ở ô kết nối và điền DNS Name ở ô **Tên trên chứng chỉ**.
+5. Bấm **Kiểm tra kết nối**, sau đó **Xem thuê bao PPPoE**. Nút **Thêm thuê bao** và **Sửa** hiện khi kết nối bằng API-SSL. Tài khoản RouterOS cần quyền API và quyền ghi để lưu thay đổi. Mật khẩu thuê bao để trống khi sửa sẽ giữ mật khẩu hiện có.
+
+Nếu app báo không mở được cổng, dùng `Test-NetConnection router.sn.mynetname.net -Port 8729` từ máy Windows cần quản trị. Nếu TCP thông mà API-SSL báo lỗi, kiểm tra chứng chỉ gán cho dịch vụ, tên DNS trên chứng chỉ, ngày giờ và CA đã nạp.
 
 ### Chạy kiểm thử
 

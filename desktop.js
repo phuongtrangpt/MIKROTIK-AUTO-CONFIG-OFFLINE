@@ -59,15 +59,16 @@ window.MTDesktop = {
         <h2>Kết nối RouterOS</h2>
         <form id="studioRouterForm">
           <div class="studio-grid">
-            <div class="field"><label for="studioHost">Địa chỉ IP</label><input id="studioHost" required placeholder="192.168.1.1"></div>
+            <div class="field"><label for="studioHost">IP hoặc DNS MikroTik Cloud</label><input id="studioHost" required maxlength="254" placeholder="192.168.88.1 hoặc router.sn.mynetname.net" autocapitalize="none" spellcheck="false"></div>
             <div class="field"><label for="studioPort">Cổng API</label><input id="studioPort" type="number" value="8729" min="1" max="65535" required></div>
             <div class="field"><label for="studioUser">Tài khoản</label><input id="studioUser" required maxlength="128" autocomplete="off"></div>
             <div class="field"><label for="studioPassword">Mật khẩu router</label><input id="studioPassword" type="password" maxlength="256" autocomplete="off"></div>
           </div>
           <label class="checkrow"><input id="studioTls" type="checkbox" checked> Dùng API-SSL</label>
+          <p id="studioPlainHint" class="hint" hidden>API thường chỉ xem được danh sách. Bật API-SSL để thêm, sửa hoặc khóa thuê bao PPPoE.</p>
           <div id="studioTlsOptions" class="studio-grid">
-            <div class="field"><label for="studioTlsName">Tên trên chứng chỉ</label><input id="studioTlsName" placeholder="Để trống nếu chứng chỉ chứa IP"></div>
-            <div class="field"><label for="studioCa">CA nội bộ dạng PEM (tùy chọn)</label><textarea id="studioCa" rows="2" maxlength="32768"></textarea></div>
+            <div class="field"><label for="studioTlsName">Tên trên chứng chỉ</label><input id="studioTlsName" maxlength="254" placeholder="Mặc định dùng IP hoặc DNS đã nhập"></div>
+            <div class="field"><label for="studioCa">CA nội bộ dạng PEM (tùy chọn)</label><textarea id="studioCa" rows="2" maxlength="32768" spellcheck="false"></textarea><label for="studioCaFile">Hoặc chọn tệp CA công khai</label><input id="studioCaFile" type="file" accept=".crt,.cer,.pem,text/plain"></div>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" type="submit" value="info">Kiểm tra kết nối</button>
@@ -268,9 +269,26 @@ window.MTDesktop = {
       editor.hidden = false;
       byId('studioPppName').focus();
     }
+    byId('studioCaFile').onchange = async event => {
+      const file = event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      try {
+        if (file.size > 32768) throw new Error('Tệp CA vượt 32 KB.');
+        const pem = (await file.text()).trim();
+        if (!/^-----BEGIN CERTIFICATE-----\s+[A-Za-z0-9+/=\s]+-----END CERTIFICATE-----$/.test(pem)) {
+          throw new Error('Chọn một chứng chỉ CA công khai dạng PEM (.crt hoặc .pem).');
+        }
+        byId('studioCa').value = pem;
+        byId('studioRouterStatus').textContent = 'Đã nạp chứng chỉ CA.';
+      } catch (error) {
+        byId('studioRouterStatus').textContent = String(error.message || error);
+      }
+    };
     tls.onchange = () => {
       byId('studioPort').value = tls.checked ? '8729' : '8728';
       byId('studioTlsOptions').hidden = !tls.checked;
+      byId('studioPlainHint').hidden = tls.checked;
       byId('studioBackupOptions').hidden = !tls.checked;
       editor.hidden = true;
       loadedRouter = undefined;
