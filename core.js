@@ -179,7 +179,7 @@
     if(!['pcc','failover'].includes(s.system.wanMode||'pcc'))errors.push('Chế độ WAN không hợp lệ.');
     if(s.wan.length>1&&s.system.wanMode!=='failover'&&pcc.total&&pcc.error>0.02)warnings.push('Tỷ lệ PCC chỉ gần đúng do giới hạn 24 phần; đường WAN có tốc độ rất nhỏ có thể nhận tỷ lệ kết nối cao hơn tỷ lệ băng thông.');
     if(s.wan.length>1&&s.wan.some(w=>w.type==='dhcp')) warnings.push('Multi-WAN DHCP dùng default-route-tables của RouterOS v7 mới; nên cập nhật RouterOS lên bản v7 stable gần nhất và kiểm tra các route sau khi chạy.');
-    if(s.wan.length>1) warnings.push('PCC chia theo kết nối, không cộng băng thông cho một phiên tải đơn. Failover trong phiên bản này kiểm tra trạng thái PPP/gateway, không kiểm tra Internet end-to-end.');
+    if(s.wan.length>1){if(s.system.wanMode!=='failover')warnings.push('PCC chia theo kết nối, không cộng băng thông cho một phiên tải đơn.');warnings.push('Failover kiểm tra trạng thái PPP/gateway, không kiểm tra Internet end-to-end.');}
     if(!['all','custom'].includes(s.lan.portMode||'all'))errors.push('LAN: chế độ phân cổng không hợp lệ.');
     if(s.lan.portMode==='custom'){
       const selected=s.lan.selectedPorts||[];
@@ -224,7 +224,7 @@
       if(!net)errors.push('PPPoE Server: network phải dạng 10.20.0.0/24.');
       else if(net.ipNum!==net.net)errors.push('PPPoE Server: network phải là địa chỉ đầu mạng (ví dụ 10.20.0.0/24).');
       if(!net||local===null||!networkContains(net,p.gateway)) errors.push('PPPoE Server: local-address không thuộc subnet PPP.');
-      if(net){const gw={...net,ipNum:local};poolRange(gw,p.poolStart,p.poolEnd,'PPPoE Server',errors); ranges.push({name:'PPPoE Server',c:net});}
+      if(net){if(local===net.net||local===net.broadcast)errors.push('PPPoE Server: local-address không được là network/broadcast.');const gw={...net,ipNum:local};poolRange(gw,p.poolStart,p.poolEnd,'PPPoE Server',errors); ranges.push({name:'PPPoE Server',c:net});}
       if(!validText(p.service,63))errors.push('PPPoE Server: service name không hợp lệ.');
       if(p.mode==='bridge'){
         if(a.lanPorts.length===0)errors.push('PPPoE Server: bridge-LAN không có cổng nào.');
