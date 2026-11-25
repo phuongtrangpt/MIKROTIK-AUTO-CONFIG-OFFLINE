@@ -20,7 +20,7 @@
   function defaultState() {
     return {
       meta: { project: 'KhachHang-01', identity: 'MT-KHACHHANG', model: 'RB5009', customPorts: '', note: '' },
-      system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, disableIPv6: true },
+      system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, remoteWinbox: false, disableIPv6: true },
       wan: [
         {label:'FPT',port:'ether1',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'},
         {label:'VNPT',port:'ether2',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'}
@@ -280,6 +280,7 @@
     add(0,'/ip firewall filter add chain=input action=accept connection-state=established,related,untracked comment='+q('Bootstrap established'),
       '/ip firewall filter add chain=input action=drop connection-state=invalid comment='+q('Bootstrap drop invalid'),
       '/ip firewall filter add chain=input action=accept in-interface-list=WAN protocol=udp src-port=67 dst-port=68 comment='+q('Bootstrap DHCP reply'),
+      ...(s.system.remoteWinbox===true?['/ip firewall filter add chain=input action=accept in-interface-list=WAN protocol=tcp dst-port=8291 comment='+q('Explicit remote WinBox')]:[]),
       '/ip firewall filter add chain=input action=drop in-interface-list=WAN comment='+q('Bootstrap block WAN management')); 
     txt(1,'02 - WAN / ROUTING TABLES');
     if(s.wan.length>1)wanInfo.forEach(x=>add(1,'/routing table add name='+x.table+' fib'));
@@ -319,7 +320,7 @@
         '/ip dhcp-server add name=dhcp-LAN interface=bridge-LAN address-pool=pool-LAN lease-time='+s.lan.lease+' disabled=no',
         '/ip dhcp-server network add address='+lanNet+' gateway='+lan.ip+' dns-server='+lan.ip);
     }
-    add(2,'/ip service set winbox disabled=no address='+lanNet,
+    add(2,'/ip service set winbox disabled=no address='+(s.system.remoteWinbox===true?'0.0.0.0/0':lanNet),
       ...(s.system.ssh?['/ip service set ssh disabled=no address='+lanNet]:[]),
       '/tool mac-server set allowed-interface-list=none',
       '/tool mac-server mac-winbox set allowed-interface-list=MGMT',
