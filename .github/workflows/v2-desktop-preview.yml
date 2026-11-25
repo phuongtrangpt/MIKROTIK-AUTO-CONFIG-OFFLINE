@@ -10,8 +10,6 @@ jobs:
   publish:
     runs-on: windows-latest
     timeout-minutes: 35
-    env:
-      STUDIO_UPDATER_PUBLIC_KEY: ${{ vars.STUDIO_UPDATER_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +33,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or @($runs).Count -eq 0) { throw 'Windows, desktop UI and CHR CI must pass for this commit before publishing.' }
       - name: Build and sign Windows installer
         env:
+          STUDIO_UPDATER_PUBLIC_KEY: ${{ vars.STUDIO_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         shell: pwsh
@@ -43,6 +42,9 @@ jobs:
           @{bundle=@{createUpdaterArtifacts=$true}; plugins=@{updater=@{pubkey=$env:STUDIO_UPDATER_PUBLIC_KEY}}} |
             ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding utf8NoBOM "$env:RUNNER_TEMP/studio-updater.json"
           npx --yes --package @tauri-apps/cli@2 tauri build --bundles nsis --config "$env:RUNNER_TEMP/studio-updater.json"
+      - name: Install the signed package and verify the window opens
+        shell: pwsh
+        run: ./tests/test_windows_desktop_startup.ps1
       - name: Publish preview installer and manifest
         env:
           GH_TOKEN: ${{ github.token }}

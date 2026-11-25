@@ -19,7 +19,7 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
         page.on('dialog',lambda dialog:dialog.accept())
         page.add_init_script("""window.__TAURI__ = {core:{invoke:async (cmd,args)=>{
           if(cmd==='update_available') return true;
-          if(cmd==='update_check') return '2.0.0-alpha.2';
+          if(cmd==='update_check') return '2.0.0-alpha.3';
           if(cmd==='update_install'){ args.progress.onmessage({downloaded:10,total:10}); return; }
           if(cmd==='router_info') return {identity:'LAB-RB5009',version:'7.21.5',board:'CHR',uptime:'1h'};
           if(cmd==='ppp_subscribers') return [{'.id':'*1',name:'lab',profile:'lab-plan',disabled:'false'}];
@@ -29,7 +29,7 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
           throw new Error(cmd);
         },Channel:class {}}};""")
         page.goto(f'http://127.0.0.1:{server.server_port}/')
-        assert page.locator('#sideVer').inner_text()=='2.0.0-alpha.1'
+        assert page.locator('#sideVer').inner_text()=='2.0.0-alpha.2'
         page.locator('#desktopTheme').click()
         assert page.locator('html').get_attribute('data-theme')=='dark'
         page.locator('#studioUpdateClose').click()

@@ -1,6 +1,6 @@
 [package]
 name = "mikrotik-studio"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 edition = "2021"
 
 [build-dependencies]
@@ -11,3 +11,6 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 studio-routeros = { path = "routeros" }
 tauri-plugin-updater = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"] }

@@ -1,27 +1,36 @@
 use serde::Serialize;
-use tauri::{ipc::Channel, AppHandle};
+use tauri::{ipc::Channel, AppHandle, Config};
 use tauri_plugin_updater::{Updater, UpdaterExt};
 
 const ENDPOINT: &str = "https://github.com/phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE/releases/download/v2-desktop-preview/latest.json";
 
+pub fn enabled(config: &Config) -> bool {
+    cfg!(target_os = "windows")
+        && config
+            .plugins
+            .0
+            .get("updater")
+            .and_then(|value| value.get("pubkey"))
+            .and_then(|value| value.as_str())
+            .is_some_and(|key| !key.trim().is_empty())
+}
+
 fn updater(app: &AppHandle) -> Result<Updater, String> {
-    let key = option_env!("STUDIO_UPDATER_PUBLIC_KEY")
-        .filter(|key| !key.trim().is_empty())
-        .ok_or("Bản thử nghiệm này chưa cấu hình khóa xác minh cập nhật.")?;
+    if !enabled(app.config()) {
+        return Err("Bản thử nghiệm này chưa cấu hình khóa xác minh cập nhật.".to_owned());
+    }
     let endpoint = ENDPOINT
         .parse()
         .map_err(|_| "Địa chỉ cập nhật không hợp lệ.")?;
     app.updater_builder()
-        .pubkey(key)
         .endpoints(vec![endpoint])
         .and_then(|builder| builder.build())
         .map_err(|_| "Không thể khởi tạo bộ cập nhật.".to_owned())
 }
 
 #[tauri::command]
-pub fn update_available() -> bool {
-    cfg!(target_os = "windows")
-        && option_env!("STUDIO_UPDATER_PUBLIC_KEY").is_some_and(|key| !key.trim().is_empty())
+pub fn update_available(app: AppHandle) -> bool {
+    enabled(app.config())
 }
 
 #[tauri::command]

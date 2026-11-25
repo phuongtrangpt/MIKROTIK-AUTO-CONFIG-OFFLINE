@@ -1,6 +1,6 @@
 # MikroTik Auto Config Studio — Offline (v1.5.0)
 
-## Desktop v2.0.0-alpha.1
+## Desktop v2.0.0-alpha.2
 
 Nhánh `develop/v2-tauri` xây dựng ứng dụng Windows bằng Tauri 2 và Rust. Bộ cài thử nghiệm nằm trong mục **Artifacts** của workflow [V2 desktop CI](https://github.com/phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE/actions/workflows/v2-desktop-ci.yml). Trình hướng dẫn trên `index.html` vẫn chạy được offline trên trình duyệt. Các tính năng desktop xuất hiện trong bộ cài.
 

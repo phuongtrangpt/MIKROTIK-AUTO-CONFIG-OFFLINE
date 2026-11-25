@@ -25,6 +25,9 @@ jobs:
       - run: node scripts/prepare-desktop.cjs
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - run: npx --yes --package @tauri-apps/cli@2 tauri build --bundles nsis
+      - name: Install the Windows package and verify the window opens
+        shell: pwsh
+        run: ./tests/test_windows_desktop_startup.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: mikrotik-studio-alpha-windows
