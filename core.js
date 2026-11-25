@@ -20,7 +20,7 @@
   function defaultState() {
     return {
       meta: { project: 'KhachHang-01', identity: 'MT-KHACHHANG', model: 'RB5009', customPorts: '', note: '' },
-      system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, remoteWinbox: false, disableIPv6: true },
+      system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, remoteWinbox: false, wanMode: 'pcc', disableIPv6: true },
       wan: [
         {label:'FPT',port:'ether1',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'},
         {label:'VNPT',port:'ether2',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'}
@@ -176,7 +176,8 @@
     });
     for(let i=0;i<allWanIPs.length;i++)for(let j=i+1;j<allWanIPs.length;j++)if(overlaps(allWanIPs[i].c,allWanIPs[j].c))errors.push('WAN tĩnh '+allWanIPs[i].label+' và '+allWanIPs[j].label+' trùng subnet.');
     const pcc=computePcc(s.wan);
-    if(s.wan.length>1&&pcc.total&&pcc.error>0.02)warnings.push('Tỷ lệ PCC chỉ gần đúng do giới hạn 24 phần; đường WAN có tốc độ rất nhỏ có thể nhận tỷ lệ kết nối cao hơn tỷ lệ băng thông.');
+    if(!['pcc','failover'].includes(s.system.wanMode||'pcc'))errors.push('Chế độ WAN không hợp lệ.');
+    if(s.wan.length>1&&s.system.wanMode!=='failover'&&pcc.total&&pcc.error>0.02)warnings.push('Tỷ lệ PCC chỉ gần đúng do giới hạn 24 phần; đường WAN có tốc độ rất nhỏ có thể nhận tỷ lệ kết nối cao hơn tỷ lệ băng thông.');
     if(s.wan.length>1&&s.wan.some(w=>w.type==='dhcp')) warnings.push('Multi-WAN DHCP dùng default-route-tables của RouterOS v7 mới; nên cập nhật RouterOS lên bản v7 stable gần nhất và kiểm tra các route sau khi chạy.');
     if(s.wan.length>1) warnings.push('PCC chia theo kết nối, không cộng băng thông cho một phiên tải đơn. Failover trong phiên bản này kiểm tra trạng thái PPP/gateway, không kiểm tra Internet end-to-end.');
     if(!['all','custom'].includes(s.lan.portMode||'all'))errors.push('LAN: chế độ phân cổng không hợp lệ.');
@@ -283,7 +284,7 @@
       ...(s.system.remoteWinbox===true?['/ip firewall filter add chain=input action=accept in-interface-list=WAN protocol=tcp dst-port=8291 comment='+q('Explicit remote WinBox')]:[]),
       '/ip firewall filter add chain=input action=drop in-interface-list=WAN comment='+q('Bootstrap block WAN management')); 
     txt(1,'02 - WAN / ROUTING TABLES');
-    if(s.wan.length>1)wanInfo.forEach(x=>add(1,'/routing table add name='+x.table+' fib'));
+    if(s.wan.length>1&&s.system.wanMode!=='failover')wanInfo.forEach(x=>add(1,'/routing table add name='+x.table+' fib'));
     wanInfo.forEach(({w,i,ifname})=>{
       add(1,'# WAN '+(i+1)+' '+lineComment(w.label)+' on '+lineComment(w.port));
       if(w.type==='pppoe'){
@@ -300,13 +301,13 @@
     wanInfo.forEach(({w,i,ifname})=>{
       if(w.type==='dhcp'){
         const tables=['main:'+String(i+1)];
-        if(s.wan.length>1)wanInfo.forEach(x=>tables.push(x.table+':'+String(x.i===i?1:2+x.i)));
+        if(s.wan.length>1&&s.system.wanMode!=='failover')wanInfo.forEach(x=>tables.push(x.table+':'+String(x.i===i?1:2+x.i)));
         add(1,'/ip dhcp-client add interface='+w.port+' add-default-route=yes use-peer-dns=no use-peer-ntp=no default-route-tables='+tables.join(',')+' check-gateway=ping disabled=no');
       } else {
         const gateway=w.type==='pppoe'?ifname:w.gateway;
         const extra=w.type==='static'?' check-gateway=ping':'';
         add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+gateway+' routing-table=main distance='+(i+1)+extra+' comment='+q('Main WAN'+(i+1)));
-        if(s.wan.length>1)wanInfo.forEach(x=>add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+gateway+' routing-table='+x.table+' distance='+(x.i===i?1:2+i)+extra+' comment='+q(x.table+' fallback WAN'+(i+1))));
+        if(s.wan.length>1&&s.system.wanMode!=='failover')wanInfo.forEach(x=>add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+gateway+' routing-table='+x.table+' distance='+(x.i===i?1:2+i)+extra+' comment='+q(x.table+' fallback WAN'+(i+1))));
       }
     });
     txt(2,'03 - LAN BRIDGE / DHCP / MANAGEMENT');
@@ -382,7 +383,7 @@
     });
     if(s.ppp.enabled)add(5,'/ip firewall address-list add list=AUTO-LOCAL address='+s.ppp.network,
       '/ip firewall address-list add list=AUTO-INET address='+s.ppp.network);
-    if(s.wan.length>1){
+    if(s.wan.length>1&&s.system.wanMode!=='failover'){
       wanInfo.forEach(x=>add(5,'/ip firewall mangle add chain=prerouting in-interface='+x.ifname+' connection-state=new connection-mark=no-mark action=mark-connection new-connection-mark='+x.mark+' passthrough=yes comment='+q('Inbound WAN'+(x.i+1))));
       const calculated=computePcc(s.wan);
       add(5,'# PCC AUTO: '+wanInfo.map((x,i)=>x.w.label+' '+x.w.speed+' = '+(calculated.weights[i]||0)+'/'+calculated.total+' phan').join(' | '));
@@ -391,7 +392,7 @@
       wanInfo.forEach(x=>add(5,
         '/ip firewall mangle add chain=prerouting in-interface-list=LAN dst-address-type=!local dst-address-list=!AUTO-LOCAL connection-mark='+x.mark+' action=mark-routing new-routing-mark='+x.table+' passthrough=no',
         '/ip firewall mangle add chain=output dst-address-type=!local connection-mark='+x.mark+' action=mark-routing new-routing-mark='+x.table+' passthrough=no'));
-    } else add(5,'# Mot WAN: khong dung PCC');
+    } else add(5,s.wan.length===1?'# Mot WAN: khong dung PCC':'# Failover: main routing table, khong dung PCC');
     add(5,'/ip firewall nat add chain=srcnat out-interface-list=WAN action=masquerade comment='+q('AUTO WAN NAT'),
       // Established and invalid already handled at top of input in bootstrap stage.
       '/ip firewall filter add chain=input action=accept protocol=icmp in-interface-list=LAN',
