@@ -61,11 +61,12 @@ function wanPage(){
   html+=field('Băng thông đăng ký với nhà mạng *',`wan.${i}.speed`,'250M hoặc 1G','Nhập tốc độ theo gói cước: 250M, 1000M, 1G. Dùng cho PCC tự tính tỷ lệ.');
   html+='</div></div>';
  });
- if(wanCount>1)html+=`<div id="pccLive">${pccPanel()}</div>`;
+ if(wanCount>1)html+=select("Chế độ nhiều WAN","system.wanMode",[["pcc","PCC + Failover"],["failover","Failover theo thứ tự WAN"]],"Failover chỉ dùng bảng main; WAN1 ưu tiên.")+`<div id="pccLive">${pccPanel()}</div>`;
  html+=`<div class="callout warn"><b>Quan trọng:</b> PCC sử dụng một WAN cho từng kết nối; không tăng tốc một kết nối đơn. Failover cơ bản kiểm tra trạng thái PPP hoặc gateway, chưa phát hiện mọi trường hợp Internet mất khi PPP vẫn còn kết nối.</div>`;
  return html;
 }
 function pccPanel(){
+ if(s.system.wanMode==='failover')return '<div class="callout">WAN dự phòng theo thứ tự khai báo; không tạo PCC.</div>';
  const ratio=C.computePcc(s.wan);
  return `<div class="soft-panel"><h3 class="subhead" style="margin:0 0 12px">⚖️ PCC tự động tính từ gói Internet</h3>${ratio.total?`<p class="helper">Tổng tốc độ khai báo: <b>${ratio.speeds.reduce((a,b)=>a+b,0).toLocaleString('vi-VN')} Mbps</b> • Chia <b>${ratio.total} phần</b></p><div class="pcc-ratio">${s.wan.map((w,i)=>`<div class="pcc-share"><div class="pcc-row"><strong>${esc(w.label)}</strong><span>${ratio.weights[i]} / ${ratio.total} phần (${(100*ratio.weights[i]/ratio.total).toFixed(1)}%)</span></div><div class="pcc-track"><span style="width:${100*ratio.weights[i]/ratio.total}%"></span></div></div>`).join('')}</div>`:'<p class="helper">Vui lòng nhập băng thông hợp lệ cho tất cả đường WAN.</p>'}<p class="hint">PCC chỉ phân chia số kết nối theo tỷ lệ tốc độ đã nhập; không đảm bảo thông lượng thực tế hoặc cộng tốc độ cho một kết nối đơn.</p></div>`;
 }
@@ -125,7 +126,7 @@ function qosPage(){let html=hSection('PCQ — chia đều thông minh','Khi ít 
 }
 function firewallPage(){const errors=C.validate(s).errors;
  return hSection('Kích hoạt Internet và Firewall','Đây là bước bắt buộc sau LAN, VLAN và PPPoE Server. Tạo NAT, PCC nếu có nhiều WAN và bộ lọc an toàn cho router.')+
- `<div class="soft-panel"><h3 class="subhead" style="margin:0 0 9px">Cấu hình sẽ sinh</h3><div class="stat-pairs"><div class="stat"><b>${s.wan.length}</b><span>Đường WAN</span></div><div class="stat"><b>${s.wan.length>1?'PCC':'NAT'}</b><span>${s.wan.length>1?'Cân bằng theo kết nối':'Định tuyến WAN đơn'}</span></div></div><p class="helper" style="margin-top:14px">Firewall: NAT ra Internet, cho phép lưu lượng hợp lệ, hạn chế truy cập router từ WAN và chặn các kết nối chuyển tiếp không được phép. Không sử dụng FastTrack.</p></div>`+
+ `<div class="soft-panel"><h3 class="subhead" style="margin:0 0 9px">Cấu hình sẽ sinh</h3><div class="stat-pairs"><div class="stat"><b>${s.wan.length}</b><span>Đường WAN</span></div><div class="stat"><b>${s.wan.length>1?(s.system.wanMode==='failover'?'Failover':'PCC'):'NAT'}</b><span>${s.wan.length>1?(s.system.wanMode==='failover'?'Dự phòng theo thứ tự':'Cân bằng theo kết nối'):'Định tuyến WAN đơn'}</span></div></div><p class="helper" style="margin-top:14px">Firewall: NAT ra Internet, cho phép lưu lượng hợp lệ, hạn chế truy cập router từ WAN và chặn các kết nối chuyển tiếp không được phép. Không sử dụng FastTrack.</p></div>`+
  `<div class="callout warn" style="margin-top:16px"><b>Cẩn trọng:</b> Hãy dán các bước 1–5 trước khi dán bước này. Nếu đã thay đổi WAN, LAN hoặc VLAN sau khi dán lệnh cũ, phải reset router về No Default Configuration và tạo lại bộ lệnh mới; không dán đè.</div>`+
  (errors.length?`<div class="validation-panel fail"><b>Còn ${errors.length} lỗi trong cấu hình. Hãy sửa trước khi tạo lệnh bảo mật.</b><ul class="err-list">${errors.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:'');
 }
