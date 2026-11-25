@@ -47,3 +47,20 @@
 .update-panel .note{background:#f3f7fd;border-radius:8px;padding:9px;color:#4c6689;font-size:12px;margin-top:12px}
 #updateCheckButton:disabled{opacity:.65;cursor:wait}
 @media(max-width:750px){.update-panel{top:64px;right:12px}.topbar-actions{gap:5px}.topbar-actions .btn{padding:7px 9px;font-size:11px}}
+.studio-dialog{width:min(760px,calc(100% - 32px));max-height:85vh;overflow:auto;padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);box-shadow:0 22px 70px #0005}
+.studio-dialog::backdrop{background:#080f20a0}
+.studio-close{float:right;margin:0 0 12px 12px}
+.studio-dialog h2{margin:0 0 18px}
+.studio-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}
+.studio-dialog details{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:10px}
+.studio-dialog summary{cursor:pointer}
+#studioProjectList,#studioRouterResult ul{padding:0;list-style:none}
+#studioProjectList li{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding:8px 0}
+#studioProjectList li span{flex:1;overflow-wrap:anywhere}
+@media(max-width:600px){.studio-grid{grid-template-columns:1fr}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#111827;--panel:#1b2638;--ink:#eef3fc;--muted:#b1bfd3;--line:#3b4b62;--primary:#78a9ff;--primarydark:#457ee9;--soft:#24344c;--green:#6ddeac;--orange:#ffcc80;--red:#ff9ea7}
+[data-theme="dark"] :is(.topbar,.welcome-steps span,.code-workflow,.copyright-footer,.contact-links a,.btn-outline,.btn-ghost,.port-check,.checkrow,.soft-panel,.update-panel,.field input,.field textarea,.field select,.wan-hint){background:var(--soft);border-color:var(--line);color:var(--ink)}
+[data-theme="dark"] :is(.section-title,.wizard-welcome h2,.copyright-footer b,.pcc-row,.subhead,.field label,.update-title){color:var(--ink)}
+[data-theme="dark"] :is(.hint,.section-sub,.wizard-welcome>p,.checkrow small,.footer-note,.update-panel .note){color:var(--muted)}
+[data-theme="dark"] .callout.warn{background:#352b1c;border-color:#765934;color:#ffe2ad}
+[data-theme="dark"] .btn-primary{background:#2861d0;color:white}

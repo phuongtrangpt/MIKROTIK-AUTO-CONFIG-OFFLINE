@@ -77,7 +77,7 @@ function basicPage(){const modelOpts=Object.keys(C.MODELS).map(x=>[x,x]);return 
  <hr class="rule"><h2 class="section-title">DNS & Đồng bộ thời gian</h2><p class="section-sub">Sử dụng múi giờ Asia/Ho_Chi_Minh và cấu hình NTP để đồng bộ thời gian router.</p>
  <div class="form-grid">${field('DNS chính','system.dns1','1.1.1.1')}${field('DNS dự phòng','system.dns2','8.8.8.8')}${field('NTP Server 1','system.ntp1','time.google.com')}${field('NTP Server 2','system.ntp2','pool.ntp.org')}</div><hr class="rule">
  <h2 class="section-title">Bảo mật cơ bản</h2><p class="section-sub">Telnet, FTP, WebFig và API sẽ bị tắt; WinBox mặc định chỉ cho phép LAN; có thể chủ động mở từ WAN.</p>
- <div style="display:grid;gap:10px">${toggle('Cho phép WinBox từ Internet','system.remoteWinbox','Mở TCP 8291 trên WAN; cần mật khẩu mạnh và RouterOS cập nhật. Ưu tiên VPN nếu có.')}${toggle('Cho phép SSH','system.ssh','Mặc định tắt SSH; nếu bật, chỉ cho kết nối từ mạng LAN quản trị.')}${toggle('Tắt IPv6 (bắt buộc cho mẫu IPv4 hiện tại)','system.disableIPv6','Bản này chưa sinh firewall/routing IPv6; phải tắt IPv6 để tránh vô tình mở truy cập từ WAN.')}</div>
+ <div style="display:grid;gap:10px">${toggle('Cho phép WinBox từ Internet','system.remoteWinbox','Mở TCP 8291 trên WAN; cần mật khẩu mạnh và RouterOS cập nhật. Ưu tiên VPN nếu có.')}${s.system.remoteWinbox?field('Nguồn được truy cập WinBox từ WAN','system.remoteWinboxSources','203.0.113.10/32, 198.51.100.0/24','Để trống để giữ lựa chọn cho phép mọi IP trên WAN.'):''}${toggle('Cho phép SSH','system.ssh','Mặc định tắt SSH; nếu bật, chỉ cho kết nối từ mạng LAN quản trị.')}${toggle('Tắt IPv6 (bắt buộc cho mẫu IPv4 hiện tại)','system.disableIPv6','Bản này chưa sinh firewall/routing IPv6; phải tắt IPv6 để tránh vô tình mở truy cập từ WAN.')}</div>
  <div class="callout warn" style="margin-top:17px">Sau khi chạy script, Winbox qua MAC chỉ còn cho LAN; hãy nối máy của anh vào cổng LAN untagged và đặt IP cùng dải LAN nếu cần.</div>`;}
 function lanPage(){const lan=C.parseCIDR(s.lan.gateway),pool=C.autoPool(lan),a=C.getAlloc(s);return hSection('Bridge LAN & DHCP','Chọn tất cả cổng LAN hoặc tự chọn chính xác cổng nào được đưa vào bridge-LAN. Cổng không chọn để dành cho PPPoE Server hoặc mục đích khác.')+
  `<div class="soft-panel"><h3 class="subhead" style="margin:0 0 9px">Phân cổng Bridge LAN</h3>${select('Chọn cổng đưa vào Bridge LAN','lan.portMode',[['all','Tất cả cổng còn lại (trừ WAN và PPPoE riêng)'],['custom','Tự chọn cổng LAN']])}${s.lan.portMode==='custom'?`<div class="field" style="margin-top:15px"><label>Chọn cổng thuộc bridge-LAN</label><div class="port-grid">${a.available.map(v=>`<label class="port-check ${a.dedicated.includes(v)?'disabled':''}"><input type="checkbox" data-lanport="${esc(v)}" ${s.lan.selectedPorts.includes(v)?'checked':''} ${a.dedicated.includes(v)?'disabled':''}>${esc(v)}</label>`).join('')}</div><span class="hint">Cổng không chọn KHÔNG được thêm vào bridge-LAN. Có thể dành cho PPPoE Server riêng ở bước 5.</span></div>`:''}</div><div class="form-grid">${field('Địa chỉ Gateway LAN (CIDR) *','lan.gateway','192.168.1.1/24','IP đặt cho bridge-LAN. Không nhập network .0 mà nhập IP router.')}${select('DHCP Lease Time','lan.lease',[['1h','1 giờ'],['12h','12 giờ'],['1d','1 ngày'],['3d','3 ngày'],['7d','7 ngày']])}</div><div style="margin-top:17px">${toggle('Bật DHCP Server cho LAN','lan.dhcp','Tự tạo IP Pool, DHCP Network và gateway cho client.')}</div>`+
@@ -169,7 +169,7 @@ function outputPage(){const result=C.render(s),ok=!result.errors.length;
  else html+='<div class="empty-state" style="margin:16px 0">Sửa các lỗi được liệt kê phía trên, sau đó quay lại bước cuối để xuất file.</div>';
  html+=`<div class="callout warn" style="margin-top:16px"><b>Kiểm tra cú pháp trước khi áp dụng:</b> Trên RouterOS 7.16+ có thể tải file .RSC lên router lab rồi chạy <code>import file-name=ten_file.rsc verbose=yes dry-run=yes</code>. Đây chỉ là kiểm thử cú pháp, vẫn cần kiểm tra trên thiết bị thật và không chạy lặp cấu hình.</div>`;
  html+=`<div class="soft-panel" style="margin-top:20px"><h3 class="subhead">Kiểm tra trên MikroTik sau khi dán script</h3><p class="helper">Sao chép các lệnh <b>chỉ đọc</b> để xem kết nối PPPoE, route, DHCP, VLAN, firewall, PCQ và các phiên khách hàng khi thử nghiệm lab.</p><button type="button" class="btn btn-outline btn-small" data-action="copy-diagnostics">▣ Sao chép lệnh kiểm tra (chỉ đọc)</button></div>`;
- html+=`<hr class="rule"><h2 class="section-title">Lưu / mở mẫu khách hàng</h2><p class="section-sub">Lưu cấu hình để chỉnh sửa lần sau. Mặc định không lưu mật khẩu của WAN/PPPoE trong file JSON.</p><label class="checkrow"><input id="exportSecretCheckbox" type="checkbox"><span><strong>Lưu cả mật khẩu trong mẫu JSON</strong><small>Chỉ bật khi cần; JSON lưu mật khẩu dạng rõ.</small></span></label><div class="btn-row" style="margin-top:14px"><button class="btn btn-outline" data-action="save-json">↓ Lưu mẫu .JSON</button><button class="btn btn-red" data-action="reset-project">Tạo cấu hình mới</button></div>`;
+ html+=`<hr class="rule"><h2 class="section-title">Lưu / mở mẫu khách hàng</h2><p class="section-sub">Lưu cấu hình để chỉnh sửa lần sau. Mẫu JSON lưu cấu hình WAN và LAN. Nhập lại mật khẩu WAN và danh sách tài khoản PPPoE khi cần sinh lệnh.</p><div class="btn-row" style="margin-top:14px"><button class="btn btn-outline" data-action="save-json">↓ Lưu mẫu .JSON</button><button class="btn btn-red" data-action="reset-project">Tạo cấu hình mới</button></div>`;
  return html;
 }
 function renderStep(){
@@ -244,7 +244,19 @@ function changeWanCount(n){const all=C.ports(s);if(n>all.length){toast('Không �
  s.lan.selectedPorts=(s.lan.selectedPorts||[]).filter(p=>!s.wan.some(w=>w.port===p));
  s.ppp.ports=(s.ppp.ports||[]).filter(p=>!s.wan.some(w=>w.port===p));
  invalidateCopiedScripts();renderStep();}
-function prepareJSON(withSecrets){const x=C.copy(s);if(!withSecrets){x.wan.forEach(w=>w.password='');x.ppp.usersText='';}return JSON.stringify({app:'MikroTik Auto Config Studio',schema:1,version:C.VERSION,containsSecrets:!!withSecrets,data:x},null,2);}
+function projectSnapshot(){
+ const data=mergeKnown(C.defaultState(),s);
+ data.wan.forEach(w=>w.password='');
+ data.ppp.usersText='';
+ return {app:'MikroTik Auto Config Studio',schema:1,version:C.VERSION,containsSecrets:false,data};
+}
+function loadProject(data){
+ s=mergeKnown(C.defaultState(),data);
+ if(!s.wan.length)s.wan=C.defaultState().wan;
+ s.wan.forEach(w=>{if(w.type==='pppoe')w.ispConfirmed=false;});
+ step=0;furthest=7;started=true;phase='form';copiedSteps.clear();
+ copiedScriptSnapshots.clear();changedAfterCopy=false;showSecrets=false;renderStep();
+}
 function download(data,name,mime){const blob=new Blob([data],{type:mime});const u=URL.createObjectURL(blob);const link=document.createElement('a');link.href=u;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);}
 function filename(ext){return (s.meta.project.trim().replace(/[^A-Za-z0-9_-]/g,'_').slice(0,35)||'MikroTik')+'_RouterOS7.'+ext;}
 function safeConfirm(){return window.confirm('Script TXT/RSC sẽ chứa mật khẩu PPPoE ở dạng đọc được. Chỉ sử dụng trên RouterOS 7 trống, không chia sẻ file công khai. Tiếp tục?');}
@@ -266,7 +278,7 @@ function mergeKnown(target,data){if(!data||typeof data!=='object'||Array.isArray
  return target;
 }
 async function readJSON(file){if(!file)return;try{if(file.size>1000000)throw new Error('Mẫu JSON quá lớn (tối đa 1MB).');const obj=JSON.parse(await file.text());if(obj.app!=='MikroTik Auto Config Studio'||obj.schema!==1||!obj.data)throw new Error('Không đúng định dạng mẫu cấu hình phiên bản 1.');if(obj.containsSecrets&&!confirm('Mẫu chứa mật khẩu. Chỉ nhập từ nguồn tin cậy. Tiếp tục?'))return;
- s=mergeKnown(C.defaultState(),obj.data);if(!Array.isArray(s.wan)||!s.wan.length)s.wan=C.defaultState().wan;s.wan.forEach(w=>{if(w.type==='pppoe')w.ispConfirmed=false;});step=0;furthest=7;started=true;phase='form';copiedSteps.clear();copiedScriptSnapshots.clear();changedAfterCopy=false;showSecrets=false;renderStep();toast('Đã mở mẫu cấu hình. Kiểm tra lại thông tin WAN trước khi xuất.');}catch(err){toast('Không đọc được JSON: '+err.message);}}
+ loadProject(obj.data);toast('Đã mở mẫu cấu hình. Kiểm tra lại thông tin WAN trước khi xuất.');}catch(err){toast('Không đọc được JSON: '+err.message);}}
 function eventClick(e){const nav=e.target.closest('[data-step]');if(nav){const to=Number(nav.dataset.step);if(!started||to>furthest)return;step=to;phase='form';showSecrets=false;renderStep();window.scrollTo({top:0,behavior:'smooth'});return;}
  const btn=e.target.closest('[data-action]');if(!btn)return;const action=btn.dataset.action;
  if(action==='start-wizard'){started=true;step=0;phase='form';renderStep();return;}
@@ -283,7 +295,7 @@ function eventClick(e){const nav=e.target.closest('[data-step]');if(nav){const t
  if(action==='toggle-secrets'){showSecrets=!showSecrets;renderStep();return;}
  if(action==='reset-project'){if(confirm('Xóa toàn bộ thông tin đang nhập? (Không thể khôi phục nếu chưa lưu mẫu.)')){s=C.defaultState();step=0;furthest=0;started=false;phase='form';copiedSteps.clear();copiedScriptSnapshots.clear();changedAfterCopy=false;showSecrets=false;renderStep();}return;}
  if(action==='copy-diagnostics'){copyScript(C.diagnostics(s));return;}
- if(action==='save-json'){const withSecrets=!!el('exportSecretCheckbox')?.checked;if(withSecrets&&!confirm('Tệp mẫu sẽ lưu cả mật khẩu dưới dạng rõ. Bạn vẫn muốn lưu?'))return;download(prepareJSON(withSecrets),filename('json'),'application/json;charset=utf-8');toast('Đã tạo mẫu JSON'+(withSecrets?' có mật khẩu.':'.'));return;}
+ if(action==='save-json'){download(JSON.stringify(projectSnapshot(),null,2),filename('json'),'application/json;charset=utf-8');toast('Đã tạo mẫu JSON.');return;}
  if(['download-rsc','download-txt','copy'].includes(action)) {const r=C.render(s);if(r.errors.length){toast('Cấu hình có lỗi; chưa thể xuất script.');renderStep();return;}if(!safeConfirm())return;
  if(action==='copy')copyScript(r.script);else{download(r.script,filename(action==='download-rsc'?'rsc':'txt'),'text/plain;charset=utf-8');toast('Đã tạo file '+(action==='download-rsc'?'.RSC':'.TXT')+'.');}return;}
 }
@@ -373,7 +385,8 @@ el('stepContent').addEventListener('change',eventChange);
 el('stepContent').addEventListener('input',eventInput);
 el('stepContent').addEventListener('keydown',e=>{if(e.key==='Tab')return;});
 el('importJsonTop').addEventListener('click',()=>el('importJsonFile').click());
-el('updateCheckButton').addEventListener('click',checkUpdateAndDownload);
+if(window.MTDesktop)window.MTDesktop.start({projectSnapshot,loadProject,toast,download,state:()=>C.copy(s)});
+else el('updateCheckButton').addEventListener('click',checkUpdateAndDownload);
 el('importJsonFile').addEventListener('change',eventChange);
 el('prevStep').addEventListener('click',goBack);
 el('nextStep').addEventListener('click',advance);

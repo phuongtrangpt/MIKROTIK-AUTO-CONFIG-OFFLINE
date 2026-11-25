@@ -14,7 +14,16 @@ jobs:
         with:
           node-version: '22'
       - uses: dtolnay/rust-toolchain@stable
-      - run: node --test tests/v2-routing.test.cjs
+      - name: Verify JavaScript suites
+        shell: pwsh
+        run: |
+          node --test (Get-ChildItem tests -File | Where-Object { $_.Extension -in '.js', '.cjs' } | ForEach-Object FullName)
+      - name: Verify the offline launcher
+        shell: pwsh
+        run: ./tests/test_windows_batch_path.ps1
+      - run: cargo test --manifest-path src-tauri/routeros/Cargo.toml
+      - run: node scripts/prepare-desktop.cjs
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - run: npx --yes --package @tauri-apps/cli@2 tauri build --bundles nsis
       - uses: actions/upload-artifact@v4
         with:

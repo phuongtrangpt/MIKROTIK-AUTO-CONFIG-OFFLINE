@@ -1,0 +1,4 @@
+/desktop-dist/
+/src-tauri/target/
+/src-tauri/routeros/target/
+/src-tauri/routeros/Cargo.lock

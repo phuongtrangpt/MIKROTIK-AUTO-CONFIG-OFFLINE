@@ -6,6 +6,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const VERSION = '1.5.0';
+  const version = () => globalThis.MTDesktopVersion || VERSION;
   const MODELS = {
     RB5009: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','sfp-sfpplus1'],
     RB4011: ['ether1','ether2','ether3','ether4','ether5','ether6','ether7','ether8','ether9','ether10','sfp-sfpplus1'],
@@ -20,7 +21,7 @@
   function defaultState() {
     return {
       meta: { project: 'KhachHang-01', identity: 'MT-KHACHHANG', model: 'RB5009', customPorts: '', note: '' },
-      system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, remoteWinbox: false, wanMode: 'pcc', disableIPv6: true },
+      system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, remoteWinbox: false, remoteWinboxSources: '', wanMode: 'pcc', disableIPv6: true },
       wan: [
         {label:'FPT',port:'ether1',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'},
         {label:'VNPT',port:'ether2',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'}
@@ -176,6 +177,9 @@
     });
     for(let i=0;i<allWanIPs.length;i++)for(let j=i+1;j<allWanIPs.length;j++)if(overlaps(allWanIPs[i].c,allWanIPs[j].c))errors.push('WAN tĩnh '+allWanIPs[i].label+' và '+allWanIPs[j].label+' trùng subnet.');
     const pcc=computePcc(s.wan);
+    if(s.system.remoteWinbox===true && s.system.remoteWinboxSources){
+      if(!managementSources(s.system.remoteWinboxSources).length)errors.push('WinBox WAN: nhập một hoặc nhiều địa chỉ IPv4/CIDR hợp lệ, phân cách bằng dấu phẩy.');
+    }
     if(!['pcc','failover'].includes(s.system.wanMode||'pcc'))errors.push('Chế độ WAN không hợp lệ.');
     if(s.wan.length>1&&s.system.wanMode!=='failover'&&pcc.total&&pcc.error>0.02)warnings.push('Tỷ lệ PCC chỉ gần đúng do giới hạn 24 phần; đường WAN có tốc độ rất nhỏ có thể nhận tỷ lệ kết nối cao hơn tỷ lệ băng thông.');
     if(s.wan.length>1&&s.wan.some(w=>w.type==='dhcp')) warnings.push('Multi-WAN DHCP dùng default-route-tables của RouterOS v7 mới; nên cập nhật RouterOS lên bản v7 stable gần nhất và kiểm tra các route sau khi chạy.');
@@ -259,9 +263,27 @@
     {id:'firewall', title:'PCC, NAT & Firewall', optional:false},
     {id:'qos', title:'PCQ chia băng thông', optional:true}
   ];
+  function managementSources(value) {
+    const parts=String(value||'').split(',').map(x=>x.trim());
+    if(parts.length>32)return [];
+    const normalized=parts.map(value=>{
+      const [ip,bits,...extra]=value.split('/');
+      const n=ipToInt(ip);
+      if(n===null||extra.length||(bits!==undefined&&!/^(?:[0-9]|[12][0-9]|3[0-2])$/.test(bits)))return null;
+      const prefix=bits===undefined?32:Number(bits);
+      const network=prefix===0?0:(n&(0xffffffff<<(32-prefix)))>>>0;
+      return intToIp(network)+'/'+prefix;
+    });
+    return normalized.includes(null)?[]:[...new Set(normalized)];
+  }
   function createStageScripts(s) {
     const a=getAlloc(s), lan=parseCIDR(s.lan.gateway), lanNet=lan?.subnet||'0.0.0.0/32';
     const wanInfo=s.wan.map((w,i)=>({w,i,ifname:w.type==='pppoe'?'pppoe-WAN'+(i+1):w.port,table:'rt_WAN'+(i+1),mark:'cm_WAN'+(i+1)}));
+    const pcc=s.wan.length>1&&s.system.wanMode!=='failover';
+    const remoteWinbox=s.system.remoteWinbox===true;
+    const policyRoutes=s.wan.length>1&&(pcc||remoteWinbox);
+    const winboxSources=managementSources(s.system.remoteWinboxSources);
+    const winboxFilter=winboxSources.length?' src-address-list=AUTO-WINBOX':'';
     const blocks=STAGE_INFO.map(()=>[]);
     function add(k,...lines){blocks[k].push(...lines);}
     function lineComment(v){return String(v??'').replace(/[\r\n\x00-\x1f]/g,' ').replace(/[\x7f]/g,' ').slice(0,130);}
@@ -276,15 +298,16 @@
     add(0,'/ip service set ssh disabled='+(s.system.ssh?'no':'yes'),'/ip service set winbox disabled=no');
     if(s.system.disableIPv6)add(0,'/ipv6 settings set disable-ipv6=yes');
     add(0,'/interface list add name=WAN comment='+q('AUTO WAN'),'/interface list add name=LAN comment='+q('AUTO LAN'),'/interface list add name=MGMT comment='+q('AUTO Management'));
+    if(remoteWinbox)winboxSources.forEach(source=>add(0,'/ip firewall address-list add list=AUTO-WINBOX address='+source));
     // Protect an unconfigured router the moment a WAN client receives connectivity.
     // These bootstrap input rules remain above the final firewall rules.
     add(0,'/ip firewall filter add chain=input action=accept connection-state=established,related,untracked comment='+q('Bootstrap established'),
       '/ip firewall filter add chain=input action=drop connection-state=invalid comment='+q('Bootstrap drop invalid'),
       '/ip firewall filter add chain=input action=accept in-interface-list=WAN protocol=udp src-port=67 dst-port=68 comment='+q('Bootstrap DHCP reply'),
-      ...(s.system.remoteWinbox===true?['/ip firewall filter add chain=input action=accept in-interface-list=WAN protocol=tcp dst-port=8291 comment='+q('Explicit remote WinBox')]:[]),
+      ...(remoteWinbox?['/ip firewall filter add chain=input action=accept connection-state=new in-interface-list=WAN protocol=tcp dst-port=8291'+winboxFilter+' comment='+q('Explicit remote WinBox')]:[]),
       '/ip firewall filter add chain=input action=drop in-interface-list=WAN comment='+q('Bootstrap block WAN management')); 
     txt(1,'02 - WAN / ROUTING TABLES');
-    if(s.wan.length>1&&s.system.wanMode!=='failover')wanInfo.forEach(x=>add(1,'/routing table add name='+x.table+' fib'));
+    if(policyRoutes)wanInfo.forEach(x=>add(1,'/routing table add name='+x.table+' fib'));
     wanInfo.forEach(({w,i,ifname})=>{
       add(1,'# WAN '+(i+1)+' '+lineComment(w.label)+' on '+lineComment(w.port));
       if(w.type==='pppoe'){
@@ -295,19 +318,20 @@
         add(1,'/interface pppoe-client add name='+ifname+' interface='+clientOn+' user='+q(w.user)+' password='+q(w.password)+' add-default-route=no use-peer-dns=no disabled=no');
         add(1,'# Kiem tra PPPoE WAN'+(i+1)+': /interface pppoe-client monitor '+ifname+' once');
       }
-      else if(w.type==='static')add(1,'/ip address add address='+w.ip+' interface='+w.port+' comment='+q('WAN'+(i+1)));
       add(1,'/interface list member add list=WAN interface='+ifname);
+      if(w.type==='static')add(1,'/ip address add address='+w.ip+' interface='+w.port+' comment='+q('WAN'+(i+1)));
     });
     wanInfo.forEach(({w,i,ifname})=>{
       if(w.type==='dhcp'){
         const tables=['main:'+String(i+1)];
-        if(s.wan.length>1&&s.system.wanMode!=='failover')wanInfo.forEach(x=>tables.push(x.table+':'+String(x.i===i?1:2+x.i)));
+        if(policyRoutes)wanInfo.forEach(x=>tables.push(x.table+':'+String(x.i===i?1:2+i)));
         add(1,'/ip dhcp-client add interface='+w.port+' add-default-route=yes use-peer-dns=no use-peer-ntp=no default-route-tables='+tables.join(',')+' check-gateway=ping disabled=no');
       } else {
         const gateway=w.type==='pppoe'?ifname:w.gateway;
         const extra=w.type==='static'?' check-gateway=ping':'';
+        const policyGateway=w.type==='static'?gateway+'@main':gateway;
         add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+gateway+' routing-table=main distance='+(i+1)+extra+' comment='+q('Main WAN'+(i+1)));
-        if(s.wan.length>1&&s.system.wanMode!=='failover')wanInfo.forEach(x=>add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+gateway+' routing-table='+x.table+' distance='+(x.i===i?1:2+i)+extra+' comment='+q(x.table+' fallback WAN'+(i+1))));
+        if(policyRoutes)wanInfo.forEach(x=>add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+policyGateway+' routing-table='+x.table+' distance='+(x.i===i?1:2+i)+extra+' comment='+q(x.table+' fallback WAN'+(i+1))));
       }
     });
     txt(2,'03 - LAN BRIDGE / DHCP / MANAGEMENT');
@@ -321,7 +345,7 @@
         '/ip dhcp-server add name=dhcp-LAN interface=bridge-LAN address-pool=pool-LAN lease-time='+s.lan.lease+' disabled=no',
         '/ip dhcp-server network add address='+lanNet+' gateway='+lan.ip+' dns-server='+lan.ip);
     }
-    add(2,'/ip service set winbox disabled=no address='+(s.system.remoteWinbox===true?'0.0.0.0/0':lanNet),
+    add(2,'/ip service set winbox disabled=no address='+(remoteWinbox?(winboxSources.length?[lanNet,...winboxSources].join(','):'0.0.0.0/0'):lanNet),
       ...(s.system.ssh?['/ip service set ssh disabled=no address='+lanNet]:[]),
       '/tool mac-server set allowed-interface-list=none',
       '/tool mac-server mac-winbox set allowed-interface-list=MGMT',
@@ -360,7 +384,6 @@
         if(p.mode==='ports') {
           add(4,'/interface bridge add name=bridge-PPPoE protocol-mode=rstp comment='+q('PPPoE dedicated ports'));
           pports.forEach(port=>add(4,'/interface bridge port add bridge=bridge-PPPoE interface='+port));
-          add(4,'/interface list member add list=LAN interface=bridge-PPPoE');
         }
       }
       add(4,'/ip pool add name=pool-PPPoE ranges='+p.poolStart+'-'+p.poolEnd);
@@ -383,15 +406,16 @@
     });
     if(s.ppp.enabled)add(5,'/ip firewall address-list add list=AUTO-LOCAL address='+s.ppp.network,
       '/ip firewall address-list add list=AUTO-INET address='+s.ppp.network);
-    if(s.wan.length>1&&s.system.wanMode!=='failover'){
-      wanInfo.forEach(x=>add(5,'/ip firewall mangle add chain=prerouting in-interface='+x.ifname+' connection-state=new connection-mark=no-mark action=mark-connection new-connection-mark='+x.mark+' passthrough=yes comment='+q('Inbound WAN'+(x.i+1))));
+    if(policyRoutes){
+      wanInfo.forEach(x=>add(5,'/ip firewall mangle add chain=prerouting in-interface='+x.ifname+' connection-state=new connection-mark=no-mark'+(pcc?'':' dst-address-type=local protocol=tcp dst-port=8291')+' action=mark-connection new-connection-mark='+x.mark+' passthrough=yes comment='+q('Inbound WAN'+(x.i+1))));
+      if(pcc){
       const calculated=computePcc(s.wan);
       add(5,'# PCC AUTO: '+wanInfo.map((x,i)=>x.w.label+' '+x.w.speed+' = '+(calculated.weights[i]||0)+'/'+calculated.total+' phan').join(' | '));
       const slots=calculated.slots.map(i=>wanInfo[i]);
       slots.forEach((x,i)=>add(5,'/ip firewall mangle add chain=prerouting in-interface-list=LAN dst-address-type=!local dst-address-list=!AUTO-LOCAL connection-state=new connection-mark=no-mark per-connection-classifier=both-addresses-and-ports:'+slots.length+'/'+i+' action=mark-connection new-connection-mark='+x.mark+' passthrough=yes comment='+q('PCC '+x.mark+' '+(i+1)+'/'+slots.length)));
-      wanInfo.forEach(x=>add(5,
-        '/ip firewall mangle add chain=prerouting in-interface-list=LAN dst-address-type=!local dst-address-list=!AUTO-LOCAL connection-mark='+x.mark+' action=mark-routing new-routing-mark='+x.table+' passthrough=no',
-        '/ip firewall mangle add chain=output dst-address-type=!local connection-mark='+x.mark+' action=mark-routing new-routing-mark='+x.table+' passthrough=no'));
+      wanInfo.forEach(x=>add(5,'/ip firewall mangle add chain=prerouting in-interface-list=LAN dst-address-type=!local dst-address-list=!AUTO-LOCAL connection-mark='+x.mark+' action=mark-routing new-routing-mark='+x.table+' passthrough=no'));
+      }
+      wanInfo.forEach(x=>add(5,'/ip firewall mangle add chain=output dst-address-type=!local connection-mark='+x.mark+' action=mark-routing new-routing-mark='+x.table+' passthrough=no'));
     } else add(5,s.wan.length===1?'# Mot WAN: khong dung PCC':'# Failover: main routing table, khong dung PCC');
     add(5,'/ip firewall nat add chain=srcnat out-interface-list=WAN action=masquerade comment='+q('AUTO WAN NAT'),
       // Established and invalid already handled at top of input in bootstrap stage.
@@ -402,8 +426,8 @@
       '/ip firewall filter add chain=input action=drop comment='+q('Drop all other input'),
       '/ip firewall filter add chain=forward action=accept connection-state=established,related,untracked',
       '/ip firewall filter add chain=forward action=drop connection-state=invalid');
-    if(s.lan.interVlan)add(5,'/ip firewall filter add chain=forward action=accept src-address-list=AUTO-LOCAL dst-address-list=AUTO-LOCAL comment='+q('Inter LAN enabled'));
-    add(5,'/ip firewall filter add chain=forward action=accept src-address-list=AUTO-INET out-interface-list=WAN comment='+q('Internet for allowed clients'),
+    if(s.lan.interVlan)add(5,'/ip firewall filter add chain=forward action=accept in-interface-list=LAN out-interface-list=LAN src-address-list=AUTO-LOCAL dst-address-list=AUTO-LOCAL comment='+q('Inter LAN enabled'));
+    add(5,'/ip firewall filter add chain=forward action=accept in-interface-list=LAN src-address-list=AUTO-INET out-interface-list=WAN comment='+q('Internet for allowed clients'),
       '/ip firewall filter add chain=forward action=drop comment='+q('Default deny forward'));
     txt(6,'07 - PCQ FAIR SHARE');
     if(s.qos.enabled){
@@ -414,7 +438,7 @@
     }else add(6,'# PCQ: bo qua');
     return blocks.map((lines,i)=>({id:STAGE_INFO[i].id,title:STAGE_INFO[i].title,optional:STAGE_INFO[i].optional,
       enabled:i===3?!!s.vlans.length:i===4?!!s.ppp.enabled:i===6?!!s.qos.enabled:true,
-      script: '# MikroTik Auto Config Studio v'+VERSION+' | BUOC '+(i+1)+'/7 | '+STAGE_INFO[i].title+'\r\n'
+      script: '# MikroTik Auto Config Studio v'+version()+' | BUOC '+(i+1)+'/7 | '+STAGE_INFO[i].title+'\r\n'
         +'# RouterOS 7 - Chi dan 1 lan tren No Default Configuration\r\n'
         +lines.filter(Boolean).join('\r\n')+'\r\n'}));
   }
@@ -434,7 +458,7 @@
     const validation=validate(s);
     if(validation.errors.length)return {script:'',stages:[],...validation};
     const stages=createStageScripts(s);
-    const top=['# MikroTik Auto Config Studio v'+VERSION,
+    const top=['# MikroTik Auto Config Studio v'+version(),
       '# PROJECT: '+String(s.meta.project).replace(/[\r\n\x00-\x1f]/g,' '),
       '# RouterOS 7 - NO DEFAULT CONFIGURATION ONLY',
       '# CHI CHAY MOT LAN TREN ROUTER TRONG; KHONG DAN LAI SAU KHI DA CAU HINH TUNG BUOC.',
@@ -442,5 +466,5 @@
     const active=stages.filter(x=>x.enabled);
     return {script:top.join('\r\n')+'\r\n'+active.map(x=>x.script).join('\r\n')+'# SCRIPT COMPLETE\r\n',stages,...validation};
   }
-  return {VERSION,STAGE_INFO,renderStages,MODELS,defaultState,ports,parseSpeed,computePcc,parseCIDR,ipToInt,intToIp,autoPool,parseUsers,validate,render,diagnostics,copy,q,getAlloc};
+  return {get VERSION(){return version();},STAGE_INFO,renderStages,MODELS,defaultState,ports,parseSpeed,computePcc,parseCIDR,ipToInt,intToIp,autoPool,parseUsers,validate,render,diagnostics,copy,q,getAlloc};
 });
