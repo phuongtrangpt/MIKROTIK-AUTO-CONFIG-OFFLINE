@@ -41,16 +41,16 @@ window.MTDesktop = {
         <p id="studioRemoteStatus" role="status"></p>
         <div id="studioRemoteFinish" hidden>
           <div class="field"><label for="studioRemoteName">Tên dự án</label><input id="studioRemoteName" maxlength="80" required></div>
-          <label class="checkrow"><input id="studioRemoteFetch" type="checkbox"> Chuẩn bị Fetch cho NetWatch</label>
+          <label class="checkrow"><input id="studioRemoteFetch" type="checkbox"> Chuẩn bị Fetch và Scheduler cho NetWatch</label>
           <div id="studioRemoteFetchHelp" hidden>
-            <p class="hint">Dùng <code>/system/device-mode/print</code> để kiểm tra. Nếu Fetch đang tắt, chạy lệnh bên dưới khi ở cạnh router và xác nhận theo thông báo của RouterOS. Sau đó nhập script NetWatch riêng.</p>
-            <button class="btn btn-outline btn-small" id="studioRemoteFetchCopy" type="button">Sao chép lệnh bật Fetch</button>
+            <p class="hint">Dùng <code>/system/device-mode/print</code> để kiểm tra. Nếu Fetch hoặc Scheduler đang tắt, chạy lệnh khi ở cạnh router. Sau bước xác nhận vật lý, RouterOS sẽ khởi động lại. Sau đó nhập script NetWatch riêng.</p>
+            <button class="btn btn-outline btn-small" id="studioRemoteFetchCopy" type="button">Sao chép lệnh cho NetWatch</button>
           </div>
           <label class="checkrow"><input id="studioRemoteEnable" type="checkbox"> Thiết lập WireGuard để quản trị từ xa</label>
         </div>
         <form id="studioRemoteSetup" hidden>
           <div class="studio-grid">
-            <div class="field"><label for="studioRemoteEndpoint">DNS MikroTik Cloud hoặc IP WAN</label><input id="studioRemoteEndpoint" required maxlength="254" placeholder="router.sn.mynetname.net"></div>
+            <div class="field"><label for="studioRemoteEndpoint">DNS MikroTik Cloud hoặc IP WAN</label><input id="studioRemoteEndpoint" required maxlength="254" placeholder="router.sn.mynetname.net"><button class="btn btn-outline btn-small" id="studioRemoteCloudCopy" type="button">Sao chép lệnh xem DNS Cloud</button></div>
             <div class="field"><label for="studioRemotePort">Cổng UDP WireGuard</label><input id="studioRemotePort" type="number" required value="51820" min="1" max="65535"></div>
             <div class="field"><label for="studioRemoteWan">Interface WAN (tùy chọn)</label><input id="studioRemoteWan" maxlength="60" placeholder="Để trống nếu router có danh sách WAN"></div>
             <div class="field"><label for="studioRemoteAddress">IP router trong đường hầm /30</label><input id="studioRemoteAddress" required></div>
@@ -313,7 +313,8 @@ window.MTDesktop = {
       return {...record, data:{...record.data,meta:{...record.data.meta,project:name}}, netwatchFetch:byId('studioRemoteFetch').checked};
     }
     byId('studioRemoteFetch').onchange = event => { byId('studioRemoteFetchHelp').hidden = !event.target.checked; };
-    byId('studioRemoteFetchCopy').onclick = () => copyScript('/system/device-mode/update fetch=yes\n');
+    byId('studioRemoteFetchCopy').onclick = () => copyScript('/system/device-mode/update fetch=yes scheduler=yes\n');
+    byId('studioRemoteCloudCopy').onclick = () => copyScript('/ip/cloud/set ddns-enabled=yes\n/ip/cloud/print\n');
     byId('studioRemoteEnable').onchange = event => {
       const selected = event.target.checked;
       setupForm.hidden = Boolean(remoteRecord.remote) || !selected;

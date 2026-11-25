@@ -158,7 +158,7 @@ pub fn prepare(options: Options) -> Result<Provision> {
         (options.ca_pem, tls_name, options.api_port)
     } else {
         let (ca, leaf, leaf_key) = certificates(&id, router_ip)?;
-        script.push_str(":if (![/ip service get api-ssl disabled]) do={ :error \"Studio: API-SSL already enabled. Use existing certificate mode.\" };\n");
+        script.push_str(":local studioApiCert [:tostr [/ip service get api-ssl certificate]];\n:if (![/ip service get api-ssl disabled] && [:len $studioApiCert] > 0 && $studioApiCert != \"none\") do={ :error \"Studio: API-SSL already has a certificate. Use existing certificate mode.\" };\n");
         for (extension, pem) in [
             ("ca.crt", ca.as_str()),
             ("crt", leaf.as_str()),

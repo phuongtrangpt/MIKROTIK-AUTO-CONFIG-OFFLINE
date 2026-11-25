@@ -105,7 +105,7 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
         page.locator('#studioRemoteName').fill('Dự án VPN')
         page.locator('#studioRemoteFetch').check()
         page.locator('#studioRemoteFetchCopy').click()
-        page.wait_for_function("navigator.clipboard.readText().then(text=>text.includes('device-mode/update fetch=yes'))")
+        page.wait_for_function("navigator.clipboard.readText().then(text=>text.includes('device-mode/update fetch=yes scheduler=yes'))")
         page.locator('#studioRemoteEnable').check()
         page.locator('#studioRemoteEndpoint').fill('vpn.sn.mynetname.net')
         page.get_by_role('button',name='Tạo VPN và lưu dự án').click()
