@@ -1,21 +1,22 @@
 name: Publish signed V2 Windows preview
 on:
-  workflow_dispatch:
+  push:
+    tags: ['studio-v2-preview-v2.*']
 permissions:
   contents: write
 concurrency:
   group: studio-v2-preview-publishing
 jobs:
   publish:
-    if: github.ref == 'refs/heads/develop/v2-tauri'
     runs-on: windows-latest
     timeout-minutes: 35
     env:
       STUDIO_UPDATER_PUBLIC_KEY: ${{ vars.STUDIO_UPDATER_PUBLIC_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -25,12 +26,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $runs = gh run list --workflow v2-desktop-ci.yml --commit $env:GITHUB_SHA --status success --json databaseId | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or @($runs).Count -eq 0) { throw 'Windows and CHR CI must pass for this commit before publishing.' }
-          if (-not $env:STUDIO_UPDATER_PUBLIC_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Set the preview signing key and public key in repository settings.' }
+          $sha = git rev-parse HEAD
+          git merge-base --is-ancestor $sha origin/develop/v2-tauri
+          if ($LASTEXITCODE -ne 0) { throw 'The preview must be built from develop/v2-tauri.' }
+          $config = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($env:GITHUB_REF_NAME -ne "studio-v2-preview-v$($config.version)") { throw 'Preview tag and app version must match.' }
+          $runs = gh run list --workflow v2-desktop-ci.yml --branch develop/v2-tauri --commit $sha --status success --json databaseId | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or @($runs).Count -eq 0) { throw 'Windows, desktop UI and CHR CI must pass for this commit before publishing.' }
       - name: Build and sign Windows installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         shell: pwsh
         run: |
+          if (-not $env:STUDIO_UPDATER_PUBLIC_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Set the preview signing key and public key in repository settings.' }
           @{bundle=@{createUpdaterArtifacts=$true}; plugins=@{updater=@{pubkey=$env:STUDIO_UPDATER_PUBLIC_KEY}}} |
             ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding utf8NoBOM "$env:RUNNER_TEMP/studio-updater.json"
           npx --yes --package @tauri-apps/cli@2 tauri build --bundles nsis --config "$env:RUNNER_TEMP/studio-updater.json"

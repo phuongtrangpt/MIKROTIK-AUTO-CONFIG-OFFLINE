@@ -32,20 +32,39 @@ jobs:
           if-no-files-found: error
   chr:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/cache/restore@v4
+        id: chr-cache
+        with:
+          path: ${{ runner.temp }}/studio-chr-7.21.5.zip
+          key: studio-chr-7.21.5-dbb8f1739da73a68
       - name: Prepare isolated CHR lab
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y qemu-system-x86
-          curl --fail --location --retry 3 https://download.mikrotik.com/routeros/7.21.5/chr-7.21.5.img.zip -o /tmp/chr.zip
-          echo 'dbb8f1739da73a68e5167fcbc731a5ba3d50f9d9b195731b96f96fcc58904580  /tmp/chr.zip' | sha256sum --check
-          unzip -q /tmp/chr.zip -d /tmp
-      - run: python3 -u tests/chr/smoke.py /tmp/chr-7.21.5.img
+          zip_path="$RUNNER_TEMP/studio-chr-7.21.5.zip"
+          checksum="dbb8f1739da73a68e5167fcbc731a5ba3d50f9d9b195731b96f96fcc58904580  $zip_path"
+          if ! sha256sum --status --check <<< "$checksum"; then
+            rm -f "$zip_path"
+            for attempt in 1 2 3 4; do
+              if curl --http1.1 --fail --silent --show-error --location --continue-at - --connect-timeout 20 --max-time 225 https://download.mikrotik.com/routeros/7.21.5/chr-7.21.5.img.zip -o "$zip_path"; then
+                break
+              fi
+            done
+          fi
+          sha256sum --check <<< "$checksum"
+          unzip -q "$zip_path" -d "$RUNNER_TEMP"
+      - uses: actions/cache/save@v4
+        if: steps.chr-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/studio-chr-7.21.5.zip
+          key: studio-chr-7.21.5-dbb8f1739da73a68
+      - run: python3 -u tests/chr/smoke.py "$RUNNER_TEMP/chr-7.21.5.img"
   desktop-ui:
     runs-on: ubuntu-latest
     steps:

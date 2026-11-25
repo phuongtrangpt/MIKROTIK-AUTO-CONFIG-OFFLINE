@@ -23,7 +23,7 @@ Trên Windows, dựng bộ cài bằng `npx --yes --package @tauri-apps/cli@2 ta
 
 ### Kênh cập nhật thử nghiệm
 
-Workflow **Publish signed V2 Windows preview** chỉ chạy thủ công trên nhánh v2 sau khi cùng commit vượt qua Windows và CHR CI. Kênh thử nghiệm dùng prerelease riêng `v2-desktop-preview`. Thiết lập biến `STUDIO_UPDATER_PUBLIC_KEY`, secret `TAURI_SIGNING_PRIVATE_KEY` và secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` nếu khóa có mật khẩu. Các bản kiểm thử CI thông thường được dựng với cập nhật tắt. Bản có khóa công khai kiểm tra phiên bản khi mở ứng dụng và xác minh chữ ký trước khi cài.
+Workflow **Publish signed V2 Windows preview** chạy khi đẩy tag `studio-v2-preview-v<phiên-bản>` trỏ tới commit của nhánh v2 đã vượt qua Windows, giao diện và CHR CI. Kênh thử nghiệm dùng prerelease riêng `v2-desktop-preview`. Thiết lập biến `STUDIO_UPDATER_PUBLIC_KEY`, secret `TAURI_SIGNING_PRIVATE_KEY` và secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` nếu khóa có mật khẩu. Các bản kiểm thử CI thông thường được dựng với cập nhật tắt. Bản có khóa công khai kiểm tra phiên bản khi mở ứng dụng và xác minh chữ ký trước khi cài.
 
 ---
 

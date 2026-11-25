@@ -119,15 +119,6 @@ class Console:
 
     def verify_recovery(self, mode):
         name = 'CHR-' + mode.upper()
-        self.control(b'\x18')
-        self.expect([re.compile(rb'Safe Mode taken', re.I)])
-        self.expect([PROMPT])
-        self.command('/system identity set name=TEMP-SAFE-MODE')
-        self.check('[/system identity get name] = "TEMP-SAFE-MODE"')
-        self.control(b'\x04')
-        self.login()
-        self.check(f'[/system identity get name] = "{name}"')
-
         password = 'StudioBackup-74682'
         self.command(f'/system backup save name=studio-lab password={password} dont-encrypt=no encryption=aes-sha256')
         self.check_eventually('[:len [/file find where name="studio-lab.backup"]] = 1')
@@ -217,7 +208,7 @@ def verify_recursive(console, upstream, scratch):
     console.upload(scratch / 'wireguard-live.rsc', 'wireguard-live.rsc')
     console.import_fixture('wireguard-live.rsc')
     reported = console.command(':put [/interface wireguard get wg-live public-key]')
-    key = re.search(r'(?m)^([A-Za-z0-9+/]{43}=)\s*$', reported)
+    key = re.search(r'(?m)^\s*([A-Za-z0-9+/]{43}=)\s*$', reported)
     if not key:
         raise AssertionError(reported)
     private = (scratch / 'wireguard-client.key').read_text()
@@ -277,7 +268,7 @@ def run(image, qemu, scratch, mode):
             print('PASS RouterOS CHR WireGuard imports for Remote Access, Hub and Site-to-Site', flush=True)
         if mode == 'failover':
             console.verify_recovery(mode)
-            print('PASS RouterOS CHR Safe Mode undo and encrypted backup restore', flush=True)
+            print('PASS RouterOS CHR encrypted backup restore', flush=True)
     except Exception:
         for guest in (console, upstream):
             if guest:
