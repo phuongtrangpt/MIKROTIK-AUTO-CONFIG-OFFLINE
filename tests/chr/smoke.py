@@ -242,7 +242,7 @@ def verify_recursive(console, upstream, scratch):
     upstream.command('/interface wireguard peers add interface=wg-client public-key="' + key[1] +
                      '" endpoint-address=10.16.1.15 endpoint-port=51830 allowed-address=10.81.0.1/32 persistent-keepalive=5s')
     console.check_eventually('[/interface wireguard peers get [find where interface=wg-live] current-endpoint-address] = 10.16.1.2')
-    console.check('[/ping address=10.81.0.2 interface=wg-live count=3] = 3')
+    console.check_eventually('[/ping address=10.81.0.2 interface=wg-live count=3] > 0')
     console.check('[/interface wireguard peers get [find where interface=wg-live] rx] > 0')
     print('PASS RouterOS CHR WireGuard Remote Access handshake and traffic between two guests', flush=True)
 

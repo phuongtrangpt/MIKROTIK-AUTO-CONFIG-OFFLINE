@@ -89,6 +89,7 @@ fn io_error(error: io::Error) -> String {
 }
 
 fn request(stream: &mut (impl Read + Write), words: &[&str]) -> Result<Vec<Row>> {
+    let authenticating = words.first() == Some(&"/login");
     codec::send(stream, words).map_err(io_error)?;
     let mut rows = Vec::new();
     let mut total = 0;
@@ -101,7 +102,7 @@ fn request(stream: &mut (impl Read + Write), words: &[&str]) -> Result<Vec<Row>>
         let (kind, attributes) = words.split_first().ok_or("Phản hồi RouterOS trống.")?;
         match kind.as_str() {
             "!done" => {
-                if attributes.iter().any(|word| word.starts_with("=ret=")) {
+                if authenticating && attributes.iter().any(|word| word.starts_with("=ret=")) {
                     return Err(
                         "RouterOS yêu cầu phương thức đăng nhập cũ. Hãy dùng RouterOS 7.".into(),
                     );
@@ -384,6 +385,18 @@ pub fn save_subscriber(connection: &Connection, subscriber: &Subscriber) -> Resu
 mod tests {
     use super::*;
     use std::{net::TcpListener, thread};
+
+    #[test]
+    fn done_can_return_the_new_item_id() {
+        let transact = |command: &str| {
+            let mut exchange = Vec::new();
+            codec::send(&mut exchange, &[command]).unwrap();
+            codec::send(&mut exchange, &["!done", "=ret=*1"]).unwrap();
+            request(&mut io::Cursor::new(exchange), &[command])
+        };
+        assert!(transact("/ppp/secret/add").is_ok());
+        assert!(transact("/login").unwrap_err().contains("đăng nhập cũ"));
+    }
 
     #[test]
     fn reads_router_over_mock_api() {
