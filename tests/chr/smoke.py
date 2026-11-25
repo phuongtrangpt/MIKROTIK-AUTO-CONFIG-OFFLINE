@@ -126,8 +126,33 @@ class Console:
         self.send(f'/system backup load name=studio-lab.backup password={password}')
         self.expect([re.compile(rb'Restore and reboot[^\r\n]*\[y/n\]', re.I)])
         self.send('y')
+        self.expect([re.compile(rb'System configuration restored, rebooting now', re.I)])
+        self.expect([re.compile(rb'Login: ?$', re.I)], timeout=100)
+        self.send('admin')
         self.login()
         self.check(f'[/system identity get name] = "{name}"')
+
+
+    def verify_timed_rollback(self, scratch):
+        for kind in ('first','keep','timer'):
+            file = 'rollback-' + kind + '.rsc'
+            self.upload(scratch / file, file)
+        self.import_fixture('rollback-first.rsc')
+        self.check('[:len [/system scheduler find where name=studio-config-rollback and disabled=no]] = 1')
+        self.import_fixture('rollback-keep.rsc')
+        self.check('[:len [/system scheduler find where name=studio-config-rollback]] = 0')
+        self.check('[:len [/file find where name="studio-restore-1111111122222222.backup"]] = 0')
+
+        self.import_fixture('rollback-timer.rsc')
+        self.check('[:len [/system scheduler find where name=studio-config-rollback and disabled=no]] = 1')
+        self.command('/system identity set name=TEMP-WITHOUT-CONFIRM')
+        self.check('[/system identity get name] = "TEMP-WITHOUT-CONFIRM"')
+        self.send('/quit')
+        self.expect([re.compile(rb'CHR-FAILOVER Login: ?$', re.I)], timeout=100)
+        self.send('admin')
+        self.login()
+        self.check('[/system identity get name] = "CHR-FAILOVER"')
+        self.check('[:len [/system scheduler find where name=studio-config-rollback]] = 0')
 
 
 
@@ -269,6 +294,8 @@ def run(image, qemu, scratch, mode):
         if mode == 'failover':
             console.verify_recovery(mode)
             print('PASS RouterOS CHR encrypted backup restore', flush=True)
+            console.verify_timed_rollback(scratch)
+            print('PASS RouterOS CHR confirmed changes and automatic rollback after session ended', flush=True)
     except Exception:
         for guest in (console, upstream):
             if guest:

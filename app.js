@@ -389,7 +389,7 @@ el('stepContent').addEventListener('input',eventInput);
 el('stepContent').addEventListener('keydown',e=>{if(e.key==='Tab')return;});
 el('importJsonTop').addEventListener('click',()=>el('importJsonFile').click());
 if(window.MTDesktop)window.MTDesktop.start({
- projectSnapshot,loadProject,toast,download,state:()=>C.copy(s),
+ projectSnapshot,loadProject,toast,download,copyScript,state:()=>C.copy(s),
  setWireGuard:config=>{s.wireguard=config;}
 });
 else el('updateCheckButton').addEventListener('click',checkUpdateAndDownload);

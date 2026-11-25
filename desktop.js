@@ -1,7 +1,7 @@
 'use strict';
 
 window.MTDesktop = {
-  start({projectSnapshot, loadProject, toast, download, state, setWireGuard}) {
+  start({projectSnapshot, loadProject, toast, download, copyScript, state, setWireGuard}) {
     const byId = id => document.getElementById(id);
     const button = (id, label) => {
       const item = document.createElement('button');
@@ -95,7 +95,17 @@ window.MTDesktop = {
           </details>
         </form>
         <details>
-          <summary>Khôi phục nếu thay đổi làm mất kết nối</summary>
+          <summary>Hẹn tự khôi phục trên RouterOS</summary>
+          <p class="hint">Router tự khôi phục bản sao lưu mã hóa và khởi động lại khi hết thời gian. Dán lệnh chuẩn bị trong Terminal trước khi đổi cấu hình. Đợi dòng <code>Studio rollback armed</code> rồi mới thay đổi.</p>
+          <div class="field"><label for="studioRollbackTime">Thời gian chờ xác nhận</label><select id="studioRollbackTime"><option value="120">2 phút</option><option value="300" selected>5 phút</option><option value="600">10 phút</option></select></div>
+          <div class="btn-row">
+            <button class="btn btn-outline" id="studioRollbackArm">Sao chép lệnh chuẩn bị</button>
+            <button class="btn btn-outline" id="studioRollbackConfirm">Sao chép lệnh giữ cấu hình mới</button>
+          </div>
+          <p class="hint">Sau khi kiểm tra đường quản trị qua một phiên mới, dán lệnh giữ cấu hình mới bằng cùng tài khoản RouterOS. Dùng cơ chế này khi chỉnh cấu hình đang chạy. Các thao tác reset, khởi động lại và nâng firmware cần đường quản trị dự phòng.</p>
+        </details>
+        <details>
+          <summary>Khôi phục từ bản sao lưu</summary>
           <ol>
             <li>Tạo bản sao lưu mã hóa trong mục trên và tải tệp từ Files trong WinBox.</li>
             <li>Kết nối từ cổng LAN quản trị. Bật Safe Mode trong WinBox hoặc nhấn Ctrl+X trong Terminal.</li>
@@ -235,6 +245,12 @@ window.MTDesktop = {
     byId('studioVpnDownload').onclick = () => download(byId('studioVpnScript').value,'WireGuard_RouterOS7.rsc','text/plain;charset=utf-8');
 
     button('desktopRouter', 'RouterOS').onclick = () => show('router');
+    byId('studioRollbackArm').onclick = () => {
+      const random = crypto.getRandomValues(new Uint8Array(8));
+      const token = Array.from(random, byte => byte.toString(16).padStart(2,'0')).join('');
+      copyScript(window.MTRollback.arm(Number(byId('studioRollbackTime').value),token));
+    };
+    byId('studioRollbackConfirm').onclick = () => copyScript(window.MTRollback.confirm());
     const tls = byId('studioTls');
     const editor = byId('studioPppEditor');
     let loadedRouter;

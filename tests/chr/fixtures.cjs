@@ -61,3 +61,8 @@ const live = WG.render({
 if (live.errors.length) throw Error(live.errors.join('\n'));
 fs.writeFileSync(path.join(out, 'wireguard-live.rsc'), live.script);
 fs.writeFileSync(path.join(out, 'wireguard-client.key'),clientPrivate,{mode:0o600});
+
+const rollback = require('../../rollback.js');
+fs.writeFileSync(path.join(out,'rollback-first.rsc'),rollback.arm(30,'1111111122222222'));
+fs.writeFileSync(path.join(out,'rollback-keep.rsc'),rollback.confirm());
+fs.writeFileSync(path.join(out,'rollback-timer.rsc'),rollback.arm(20,'3333333344444444'));
