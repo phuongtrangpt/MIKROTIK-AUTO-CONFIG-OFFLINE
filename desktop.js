@@ -1,7 +1,7 @@
 'use strict';
 
 window.MTDesktop = {
-  start({projectSnapshot, loadProject, toast}) {
+  start({projectSnapshot, loadProject, toast, download, state, setWireGuard}) {
     const byId = id => document.getElementById(id);
     const button = (id, label) => {
       const item = document.createElement('button');
@@ -36,6 +36,24 @@ window.MTDesktop = {
         <div class="btn-row"><button class="btn btn-primary" id="studioProjectSave">Lưu cấu hình hiện tại</button></div>
         <ul id="studioProjectList"></ul>
       </section>
+      <section id="studioWireGuard" hidden>
+        <h2>Tạo cấu hình WireGuard</h2>
+        <p class="hint">Chạy script sau cấu hình cơ sở. Với Remote Access và Hub, thiết bị ngoài kết nối vào WAN 1. Cấu hình chỉ cấp quyền đến các mạng nội bộ được chọn.</p>
+        <div class="studio-grid">
+          <div class="field"><label for="studioVpnRole">Mô hình</label><select id="studioVpnRole"><option value="remote">Remote Access</option><option value="hub">Hub tập trung</option><option value="site">Site-to-Site / chi nhánh</option></select></div>
+          <div class="field"><label for="studioVpnName">Interface</label><input id="studioVpnName" value="wg-studio"></div>
+          <div class="field"><label for="studioVpnIp">IP router trong VPN</label><input id="studioVpnIp" placeholder="10.80.0.1/24"></div>
+          <div class="field"><label for="studioVpnPort">Cổng UDP</label><input id="studioVpnPort" type="number" min="1" max="65535" value="51820"></div>
+        </div>
+        <div class="field"><label for="studioVpnNetworks">LAN/VLAN được truy cập (phân cách bằng dấu phẩy)</label><input id="studioVpnNetworks" placeholder="192.168.1.0/24"></div>
+        <div id="studioVpnPeers"></div>
+        <div class="btn-row">
+          <button id="studioVpnAdd" class="btn btn-outline">Thêm peer</button>
+          <button id="studioVpnRender" class="btn btn-primary">Sinh script .RSC</button>
+        </div>
+        <p id="studioVpnStatus" role="status"></p>
+        <div class="field" id="studioVpnOutput" hidden><label for="studioVpnScript">Script RouterOS 7</label><textarea id="studioVpnScript" readonly rows="8"></textarea><button class="btn btn-outline" id="studioVpnDownload">Xuất .RSC</button></div>
+      </section>
       <section id="studioRouter" hidden>
         <h2>Kết nối RouterOS</h2>
         <form id="studioRouterForm">
@@ -54,6 +72,18 @@ window.MTDesktop = {
             <button class="btn btn-primary" type="submit" value="info">Kiểm tra kết nối</button>
             <button class="btn btn-outline" type="submit" value="ppp">Xem thuê bao PPPoE</button>
           </div>
+          <fieldset id="studioPppEditor" hidden>
+            <legend>Thông tin thuê bao PPPoE</legend>
+            <div class="studio-grid">
+              <div class="field"><label for="studioPppName">Tên thuê bao</label><input id="studioPppName" maxlength="63"></div>
+              <div class="field"><label for="studioPppProfile">Gói cước</label><select id="studioPppProfile"></select></div>
+              <div class="field"><label for="studioPppPassword">Mật khẩu PPPoE</label><input id="studioPppPassword" type="password" maxlength="128" autocomplete="off"></div>
+              <div class="field"><label for="studioPppComment">Ghi chú</label><input id="studioPppComment" maxlength="128"></div>
+            </div>
+            <label class="checkrow"><input id="studioPppDisabled" type="checkbox"> Tạm khóa thuê bao</label>
+            <p class="hint">Khi chỉnh sửa, để trống mật khẩu để giữ mật khẩu cũ. Việc khóa tài khoản áp dụng cho lần quay số tiếp theo.</p>
+            <button class="btn btn-primary" type="submit" value="ppp-save">Lưu thuê bao</button>
+          </fieldset>
           <details id="studioBackupOptions">
             <summary>Sao lưu cấu hình vào router</summary>
             <div class="studio-grid">
@@ -63,6 +93,15 @@ window.MTDesktop = {
             <button class="btn btn-outline" type="submit" value="backup">Tạo bản sao lưu mã hóa</button>
           </details>
         </form>
+        <details>
+          <summary>Khôi phục nếu thay đổi làm mất kết nối</summary>
+          <ol>
+            <li>Tạo bản sao lưu mã hóa trong mục trên và tải tệp từ Files trong WinBox.</li>
+            <li>Kết nối từ cổng LAN quản trị. Bật Safe Mode trong WinBox hoặc nhấn Ctrl+X trong Terminal.</li>
+            <li>Áp dụng từng nhóm lệnh nhỏ. Mở một phiên WinBox mới để kiểm tra đường quản trị, rồi tắt Safe Mode để giữ thay đổi.</li>
+            <li>Nếu phiên Safe Mode bị rớt, RouterOS tự hoàn tác. Khi cần phục hồi toàn bộ, mở Files trên router gốc, chọn bản sao lưu và Restore. Router sẽ khởi động lại.</li>
+          </ol>
+        </details>
         <p id="studioRouterStatus" role="status"></p>
         <div id="studioRouterResult"></div>
       </section>`;
@@ -77,10 +116,10 @@ window.MTDesktop = {
       }
     };
     const saveProjects = records => localStorage.setItem(storageKey, JSON.stringify(records));
-    let activeProjectId;
     function show(section) {
       byId('studioProjects').hidden = section !== 'projects';
       byId('studioRouter').hidden = section !== 'router';
+      byId('studioWireGuard').hidden = section !== 'wireguard';
       if (!dialog.open) dialog.showModal();
     }
     function projectList() {
@@ -96,7 +135,6 @@ window.MTDesktop = {
         open.onclick = () => {
           if (!confirm('Mở dự án này sẽ thay nội dung đang chỉnh sửa. Tiếp tục?')) return;
           loadProject(record.data);
-          activeProjectId = record.id;
           dialog.close();
           toast('Đã mở dự án ' + record.data.meta.project);
         };
@@ -107,7 +145,6 @@ window.MTDesktop = {
           if (!confirm('Xóa dự án ' + record.data.meta.project + '?')) return;
           try {
             saveProjects(projects().filter(project => project.id !== record.id));
-            if (activeProjectId === record.id) activeProjectId = undefined;
             projectList();
           } catch { toast('Không thể cập nhật danh sách dự án.'); }
         };
@@ -124,24 +161,101 @@ window.MTDesktop = {
       const name = byId('studioProjectName').value.trim();
       if (!name) { toast('Nhập tên dự án.'); return; }
       const records = projects();
-      const active = records.find(record => record.id === activeProjectId);
-      const id = active?.data.meta.project === name ? active.id : crypto.randomUUID();
+      const sameName = records.find(record => record.data.meta.project.toLowerCase() === name.toLowerCase());
+      if (sameName && !confirm('Ghi đè cấu hình đã lưu của ' + sameName.data.meta.project + '?')) return;
+      const id = sameName?.id || crypto.randomUUID();
       const snapshot = projectSnapshot();
       snapshot.data.meta.project = name;
       try {
         saveProjects([{id, ...snapshot}, ...records.filter(record => record.id !== id)]);
-        activeProjectId = id;
         projectList();
         toast('Đã lưu dự án ' + name);
       } catch { toast('Không thể lưu dự án trên máy.'); }
     };
 
+    const vpnPeers = byId('studioVpnPeers');
+    const vpnOutput = byId('studioVpnOutput');
+    const vpnFields = {role:'Role',name:'Name',address:'Ip',listenPort:'Port',networks:'Networks'};
+    function readWireGuard() {
+      const config = Object.fromEntries(Object.entries(vpnFields).map(([key,id]) => [key,byId('studioVpn'+id).value.trim()]));
+      config.peers = Array.from(vpnPeers.children, row => Object.fromEntries(
+        Array.from(row.querySelectorAll('[data-peer]'), input => [input.dataset.peer,input.value.trim()])));
+      return config;
+    }
+    const updateWireGuard = () => {
+      vpnOutput.hidden = true;
+      setWireGuard(readWireGuard());
+    };
+    const addPeer = (peer = {}) => {
+      const row = document.createElement('fieldset');
+      row.innerHTML = `
+        <legend>Peer</legend>
+        <div class="studio-grid">
+          <label class="field">Public key<input data-peer="key" maxlength="44"></label>
+          <label class="field">IP trong VPN<input data-peer="ip" placeholder="10.80.0.2"></label>
+          <label class="field">LAN chi nhánh (CIDR)<input data-peer="networks" placeholder="192.168.2.0/24"></label>
+          <label class="field">Endpoint (Site-to-Site)<input data-peer="endpoint" placeholder="vpn.example.com"></label>
+          <label class="field">Cổng endpoint<input data-peer="port" type="number" min="1" max="65535" value="51820"></label>
+          <div><button class="btn btn-outline btn-small" type="button">Bỏ peer</button></div>
+        </div>`;
+      for (const input of row.querySelectorAll('[data-peer]')) {
+        if (Object.hasOwn(peer,input.dataset.peer)) input.value = peer[input.dataset.peer];
+      }
+      row.querySelector('button').onclick = () => { row.remove(); updateWireGuard(); };
+      vpnPeers.append(row);
+      vpnOutput.hidden = true;
+    };
+    button('desktopVpn', 'WireGuard').onclick = () => {
+      const config = state().wireguard;
+      for (const [key,id] of Object.entries(vpnFields)) byId('studioVpn'+id).value = config[key];
+      vpnPeers.replaceChildren();
+      for (const peer of config.peers.length ? config.peers : [{}]) addPeer(peer);
+      vpnOutput.hidden = true;
+      byId('studioVpnStatus').textContent = '';
+      show('wireguard');
+    };
+    byId('studioWireGuard').oninput = updateWireGuard;
+    byId('studioVpnAdd').onclick = () => {
+      if (vpnPeers.children.length < 32) {
+        addPeer();
+        updateWireGuard();
+      }
+    };
+    byId('studioVpnRender').onclick = () => {
+      const config = readWireGuard();
+      setWireGuard(config);
+      const result = window.MTWireGuard.render(config,state());
+      byId('studioVpnStatus').textContent = result.errors.join(' ');
+      byId('studioVpnScript').value = result.script;
+      vpnOutput.hidden = !result.script;
+    };
+    byId('studioVpnDownload').onclick = () => download(byId('studioVpnScript').value,'WireGuard_RouterOS7.rsc','text/plain;charset=utf-8');
+
     button('desktopRouter', 'RouterOS').onclick = () => show('router');
     const tls = byId('studioTls');
+    const editor = byId('studioPppEditor');
+    let loadedRouter;
+    let pppProfiles = [];
+    let subscriberId = null;
+    function openSubscriber(row) {
+      subscriberId = row?.['.id'] || null;
+      byId('studioPppName').value = row?.name || '';
+      byId('studioPppComment').value = row?.comment || '';
+      byId('studioPppPassword').value = '';
+      byId('studioPppDisabled').checked = ['true','yes'].includes(row?.disabled);
+      const profile = byId('studioPppProfile');
+      profile.replaceChildren(...pppProfiles.map(name => new Option(name,name)));
+      if (row) profile.value = row.profile;
+      editor.hidden = false;
+      byId('studioPppName').focus();
+    }
     tls.onchange = () => {
       byId('studioPort').value = tls.checked ? '8729' : '8728';
       byId('studioTlsOptions').hidden = !tls.checked;
       byId('studioBackupOptions').hidden = !tls.checked;
+      editor.hidden = true;
+      loadedRouter = undefined;
+      byId('studioRouterResult').replaceChildren();
     };
     byId('studioRouterForm').onsubmit = async event => {
       event.preventDefault();
@@ -155,10 +269,16 @@ window.MTDesktop = {
         host: val('studioHost').trim(), port: Number(val('studioPort')), username: val('studioUser'),
         password: val('studioPassword'), tls: tls.checked, tlsName: val('studioTlsName'), caPem: val('studioCa')
       };
+      const routerId = JSON.stringify([connection.host, connection.port, connection.username, connection.tls, connection.tlsName, connection.caPem]);
+      if (action === 'ppp-save' && (!connection.tls || loadedRouter !== routerId)) {
+        byId('studioRouterStatus').textContent = 'Hãy tải lại danh sách thuê bao từ router này trước khi sửa.';
+        return;
+      }
       const backup = {name: val('studioBackupName').trim(), password: val('studioBackupPassword')};
       const status = byId('studioRouterStatus');
       const result = byId('studioRouterResult');
-      result.replaceChildren();
+      if (action !== 'ppp-save') editor.hidden = true;
+      if (action !== 'ppp-save') result.replaceChildren();
       controls.forEach(control => control.disabled = true);
       status.textContent = 'Đang chờ RouterOS phản hồi…';
       try {
@@ -166,13 +286,40 @@ window.MTDesktop = {
           const file = await invoke('router_backup', {connection, backup});
           status.textContent = 'Đã tạo ' + file + ' trong mục Files của router.';
           byId('studioBackupPassword').value = '';
-        } else if (action === 'ppp') {
+        } else if (action === 'ppp' || action === 'ppp-save') {
+          if (action === 'ppp-save') {
+            const subscriber = {
+              id:subscriberId, name:val('studioPppName').trim(), password:val('studioPppPassword'),
+              profile:val('studioPppProfile'), comment:val('studioPppComment'), disabled:byId('studioPppDisabled').checked
+            };
+            await invoke('ppp_save', {connection, subscriber});
+            byId('studioPppPassword').value = '';
+            editor.hidden = true;
+            status.textContent = 'Đã lưu thuê bao. Đang tải lại danh sách…';
+          }
+          result.replaceChildren();
           const records = await invoke('ppp_subscribers', {connection});
-          status.textContent = 'Thuê bao PPPoE: ' + records.length;
+          status.textContent = (action === 'ppp-save' ? 'Đã lưu. ' : '') + 'Thuê bao PPPoE: ' + records.length;
+          if (connection.tls) {
+            pppProfiles = await invoke('ppp_profiles', {connection});
+            loadedRouter = routerId;
+            const add = document.createElement('button');
+            add.className = 'btn btn-outline btn-small';
+            add.textContent = 'Thêm thuê bao';
+            add.onclick = () => openSubscriber();
+            result.append(add);
+          }
           const list = document.createElement('ul');
           for (const row of records) {
             const item = document.createElement('li');
-            item.textContent = [row.name, row.profile, row.disabled === 'true' ? 'Tạm khóa' : 'Bật', row.comment].filter(Boolean).join(' · ');
+            item.textContent = [row.name, row.profile, ['true','yes'].includes(row.disabled) ? 'Tạm khóa' : 'Bật', row.comment].filter(Boolean).join(' · ');
+            if (connection.tls && row['.id']) {
+              const edit = document.createElement('button');
+              edit.className = 'btn btn-outline btn-small';
+              edit.textContent = 'Sửa';
+              edit.onclick = () => openSubscriber(row);
+              item.append(' ',edit);
+            }
             list.append(item);
           }
           result.append(list);
@@ -187,9 +334,70 @@ window.MTDesktop = {
       }
     };
     dialog.addEventListener('close', () => {
-      for (const id of ['studioPassword','studioBackupPassword']) byId(id).value = '';
+      for (const id of ['studioPassword','studioBackupPassword','studioPppPassword']) byId(id).value = '';
     });
     const update = byId('updateCheckButton');
     update.hidden = true;
+    const panel = byId('updatePanel');
+    panel.innerHTML = '<div class="update-title">Cập nhật ứng dụng<button id="studioUpdateClose" type="button" aria-label="Đóng">×</button></div><p id="studioUpdateStatus"></p><progress id="studioUpdateProgress" hidden></progress><button class="btn btn-primary btn-small" id="studioUpdateInstall" hidden>Tải và cài đặt</button>';
+    byId('studioUpdateClose').onclick = () => { panel.hidden = true; };
+    const updateStatus = byId('studioUpdateStatus');
+    const install = byId('studioUpdateInstall');
+    const progressBar = byId('studioUpdateProgress');
+    let busy = false;
+    async function checkUpdate(quiet) {
+      if (busy) return;
+      busy = true;
+      install.hidden = true;
+      progressBar.hidden = true;
+      if (!quiet) {
+        panel.hidden = false;
+        updateStatus.textContent = 'Đang kiểm tra phiên bản…';
+      }
+      try {
+        const version = await invoke('update_check');
+        if (version) {
+          panel.hidden = false;
+          updateStatus.textContent = 'Đã có phiên bản ' + version + '. Lưu dự án trước khi cài đặt.';
+          install.dataset.version = version;
+          install.hidden = false;
+        } else if (!quiet) updateStatus.textContent = 'Đang dùng phiên bản mới nhất của kênh thử nghiệm.';
+      } catch (error) {
+        if (!quiet) updateStatus.textContent = String(error);
+      } finally { busy = false; }
+    }
+    install.onclick = async () => {
+      if (busy) return;
+      busy = true;
+      install.disabled = true;
+      progressBar.hidden = false;
+      progressBar.removeAttribute('value');
+      updateStatus.textContent = 'Đang tải bản cập nhật…';
+      const progress = new window.__TAURI__.core.Channel();
+      progress.onmessage = data => {
+        if (data.total) {
+          progressBar.max = data.total;
+          progressBar.value = data.downloaded;
+          updateStatus.textContent = 'Đang tải ' + Math.min(100, Math.round(data.downloaded / data.total * 100)) + '%';
+        }
+      };
+      try {
+        await invoke('update_install', {version:install.dataset.version, progress});
+        updateStatus.textContent = 'Đã chuyển bản cập nhật cho bộ cài.';
+        install.hidden = true;
+      } catch (error) {
+        updateStatus.textContent = String(error);
+      } finally {
+        busy = false;
+        install.disabled = false;
+        progressBar.hidden = true;
+      }
+    };
+    invoke('update_available').then(available => {
+      update.hidden = !available;
+      if (!available) return;
+      update.onclick = () => checkUpdate(false);
+      checkUpdate(true);
+    }).catch(() => {});
   }
 };

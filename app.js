@@ -40,7 +40,7 @@ function hSection(title,sub){return `<h2 class="section-title">${title}</h2><p c
 function wanPage(){
  const wanCount=s.wan.length, all=C.ports(s);
  let html=hSection('Kết nối Internet','WAN mặc định bắt đầu từ ether1. Với PPPoE, hãy xác nhận nhà mạng yêu cầu quay trực tiếp hay gắn thẻ VLAN 802.1Q.');
- html+=`<div class="form-grid"><div class="field"><label for="wanCount">Số lượng đường WAN</label><select id="wanCount">${[1,2,3,4].map(x=>`<option value="${x}" ${wanCount===x?'selected':''}>${x} WAN</option>`).join('')}</select><span class="hint">Các cổng WAN được loại khỏi Bridge LAN.</span></div><div class="callout">${wanCount>1?'Đã bật chế độ PCC + Failover (tự tạo routes và mangle).':'Một WAN sẽ sử dụng default route đơn giản, không sinh PCC.'}</div></div><hr class="rule">`;
+ html+=`<div class="form-grid"><div class="field"><label for="wanCount">Số lượng đường WAN</label><select id="wanCount">${[1,2,3,4].map(x=>`<option value="${x}" ${wanCount===x?'selected':''}>${x} WAN</option>`).join('')}</select><span class="hint">Các cổng WAN được loại khỏi Bridge LAN.</span></div><div class="callout">${wanCount>1?'Có thể chọn PCC + Failover hoặc chỉ dùng Failover.':'Một WAN sẽ sử dụng default route đơn giản, không sinh PCC.'}</div></div><hr class="rule">`;
  s.wan.forEach((w,i)=>{
   html+=`<div class="wan-card"><div class="card-head"><strong>🌐 WAN ${i+1} <span class="badge-lite">${esc(w.type.toUpperCase())}</span></strong><small>${i===0?'WAN chính':'WAN dự phòng / cân bằng tải'}</small></div><div class="form-grid triple">`;
   html+=field('Tên nhà mạng',`wan.${i}.label`,'FPT / VNPT');
@@ -58,11 +58,12 @@ function wanPage(){
   }
   if(w.type==='static') {html+=field('WAN IP / Prefix *',`wan.${i}.ip`,'Ví dụ 203.0.113.2/30');html+=field('Gateway WAN *',`wan.${i}.gateway`,'Ví dụ 203.0.113.1');}
   if(w.type==='dhcp') html+='<div class="callout">WAN sẽ xin IP, gateway tự động từ modem/nhà mạng qua DHCP Client. Không cần nhập user/pass.</div>';
+  html+=field('IP giám sát Internet (tùy chọn)',`wan.${i}.probe`,'Ví dụ 1.1.1.1','Dùng một địa chỉ trả lời ping riêng cho từng WAN. Để trống dùng kiểm tra cơ bản.');
   html+=field('Băng thông đăng ký với nhà mạng *',`wan.${i}.speed`,'250M hoặc 1G','Nhập tốc độ theo gói cước: 250M, 1000M, 1G. Dùng cho PCC tự tính tỷ lệ.');
   html+='</div></div>';
  });
- if(wanCount>1)html+=select("Chế độ nhiều WAN","system.wanMode",[["pcc","PCC + Failover"],["failover","Failover theo thứ tự WAN"]],"Failover chỉ dùng bảng main; WAN1 ưu tiên.")+`<div id="pccLive">${pccPanel()}</div>`;
- html+=`<div class="callout warn"><b>Quan trọng:</b> PCC sử dụng một WAN cho từng kết nối; không tăng tốc một kết nối đơn. Failover cơ bản kiểm tra trạng thái PPP hoặc gateway, chưa phát hiện mọi trường hợp Internet mất khi PPP vẫn còn kết nối.</div>`;
+ if(wanCount>1)html+=select("Chế độ nhiều WAN","system.wanMode",[["pcc","PCC + Failover"],["failover","Failover theo thứ tự WAN"]],"WAN 1 ưu tiên. Nếu bật WinBox WAN, app tạo thêm bảng để phản hồi đúng đường vào.")+`<div id="pccLive">${pccPanel()}</div>`;
+ html+=`<div class="callout warn"><b>Quan trọng:</b> PCC sử dụng một WAN cho từng kết nối; không tăng tốc một kết nối đơn. Nhập IP giám sát nếu muốn kiểm tra đường Internet ngoài modem.</div>`;
  return html;
 }
 function pccPanel(){
@@ -238,7 +239,7 @@ function updateSummary(){
 }
 function addVlan(){const ids=s.vlans.map(v=>Number(v.id));let id=10;while(ids.includes(id))id+=10;s.vlans.push({id,name:'VLAN'+id,mode:'routed',gateway:'192.168.'+id+'.1/24',dhcp:true,poolStart:'',poolEnd:'',internet:true,trunkPorts:[],accessPorts:[]});invalidateCopiedScripts();renderStep();toast('Đã tạo VLAN '+id+'. Chọn cổng Trunk hoặc Access.');}
 function changeWanCount(n){const all=C.ports(s);if(n>all.length){toast('Không đủ cổng vật lý trên thiết bị.');return;}const old=s.wan;
- s.wan=Array.from({length:n},(_,i)=>old[i]||{label:'WAN'+(i+1),port:all[i]||'ether'+(i+1),type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'});
+ s.wan=Array.from({length:n},(_,i)=>old[i]||{label:'WAN'+(i+1),port:all[i]||'ether'+(i+1),type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',probe:'',weight:1,speed:'500M'});
  const used=new Set();s.wan.forEach((w,i)=>{if(!all.includes(w.port)||used.has(w.port))w.port=all.find(p=>!used.has(p))||w.port;used.add(w.port);});
  if(s.wan.some(w=>w.port===s.ppp.port))s.ppp.port=all.findLast(p=>!s.wan.some(w=>w.port===p))||'';
  s.lan.selectedPorts=(s.lan.selectedPorts||[]).filter(p=>!s.wan.some(w=>w.port===p));
@@ -271,7 +272,9 @@ function copyScript(str,onSuccess){
  else fallback();
 }
 function mergeKnown(target,data){if(!data||typeof data!=='object'||Array.isArray(data))return target;
- for(const key of Object.keys(target)){if(!Object.hasOwn(data,key))continue;const val=data[key];if(Array.isArray(target[key])){if(Array.isArray(val)){if(key==='wan'||key==='vlans'){target[key]=val.slice(0,key==='wan'?4:40).filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map(x=>{const shape=key==='wan'?C.defaultState().wan[0]:{id:10,name:'VLAN10',mode:'routed',gateway:'192.168.10.1/24',dhcp:true,poolStart:'',poolEnd:'',internet:true,trunkPorts:[],accessPorts:[]};const item=mergeKnown(shape,x);if(key==='wan'&&typeof item.speed!=='string')item.speed='500M';if(key==='vlans'){item.trunkPorts=Array.isArray(x.trunkPorts)?x.trunkPorts.filter(y=>typeof y==='string').slice(0,30):[];item.accessPorts=Array.isArray(x.accessPorts)?x.accessPorts.filter(y=>typeof y==='string').slice(0,30):[];}return item;});}else if(key==='selectedPorts'||key==='ports'){target[key]=val.filter(y=>typeof y==='string').slice(0,32);}}}
+ for(const key of Object.keys(target)){if(!Object.hasOwn(data,key))continue;const val=data[key];if(Array.isArray(target[key])){if(Array.isArray(val)){if(key==='peers'){
+ target[key]=val.slice(0,32).filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map(x=>mergeKnown({key:'',ip:'',networks:'',endpoint:'',port:'51820'},x));
+ }else if(key==='wan'||key==='vlans'){target[key]=val.slice(0,key==='wan'?4:40).filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map(x=>{const shape=key==='wan'?C.defaultState().wan[0]:{id:10,name:'VLAN10',mode:'routed',gateway:'192.168.10.1/24',dhcp:true,poolStart:'',poolEnd:'',internet:true,trunkPorts:[],accessPorts:[]};const item=mergeKnown(shape,x);if(key==='wan'&&typeof item.speed!=='string')item.speed='500M';if(key==='vlans'){item.trunkPorts=Array.isArray(x.trunkPorts)?x.trunkPorts.filter(y=>typeof y==='string').slice(0,30):[];item.accessPorts=Array.isArray(x.accessPorts)?x.accessPorts.filter(y=>typeof y==='string').slice(0,30):[];}return item;});}else if(key==='selectedPorts'||key==='ports'){target[key]=val.filter(y=>typeof y==='string').slice(0,32);}}}
  else if(target[key]&&typeof target[key]==='object'){mergeKnown(target[key],val);}
  else if(typeof target[key]===typeof val && (['string','number','boolean'].includes(typeof val))){target[key]=val;}
  }
@@ -385,7 +388,10 @@ el('stepContent').addEventListener('change',eventChange);
 el('stepContent').addEventListener('input',eventInput);
 el('stepContent').addEventListener('keydown',e=>{if(e.key==='Tab')return;});
 el('importJsonTop').addEventListener('click',()=>el('importJsonFile').click());
-if(window.MTDesktop)window.MTDesktop.start({projectSnapshot,loadProject,toast,download,state:()=>C.copy(s)});
+if(window.MTDesktop)window.MTDesktop.start({
+ projectSnapshot,loadProject,toast,download,state:()=>C.copy(s),
+ setWireGuard:config=>{s.wireguard=config;}
+});
 else el('updateCheckButton').addEventListener('click',checkUpdateAndDownload);
 el('importJsonFile').addEventListener('change',eventChange);
 el('prevStep').addEventListener('click',goBack);

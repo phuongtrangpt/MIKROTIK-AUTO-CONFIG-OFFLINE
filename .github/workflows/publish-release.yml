@@ -2,6 +2,7 @@ name: Publish Windows Offline Release
 
 on:
   push:
+    branches: ['main']
     paths:
       - '.github/workflows/publish-release.yml'
   workflow_dispatch:
@@ -16,6 +17,7 @@ permissions:
 
 jobs:
   windows-updater-path-test:
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - name: Checkout source

@@ -23,11 +23,12 @@
       meta: { project: 'KhachHang-01', identity: 'MT-KHACHHANG', model: 'RB5009', customPorts: '', note: '' },
       system: { dns1: '1.1.1.1', dns2: '8.8.8.8', ntp1: 'time.google.com', ntp2: 'pool.ntp.org', ssh: false, remoteWinbox: false, remoteWinboxSources: '', wanMode: 'pcc', disableIPv6: true },
       wan: [
-        {label:'FPT',port:'ether1',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'},
-        {label:'VNPT',port:'ether2',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',weight:1,speed:'500M'}
+        {label:'FPT',port:'ether1',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',probe:'',weight:1,speed:'500M'},
+        {label:'VNPT',port:'ether2',type:'pppoe',pppoeMode:'unknown',ispConfirmed:false,vlanId:'',user:'',password:'',ip:'',gateway:'',probe:'',weight:1,speed:'500M'}
       ],
       lan: { portMode:'all', selectedPorts:[], gateway: '192.168.1.1/24', dhcp: true, poolStart: '',poolEnd:'',lease:'1d',interVlan:false },
       vlans: [],
+      wireguard:{role:'remote',name:'wg-studio',address:'',listenPort:'51820',networks:'',peers:[]},
       qos: {enabled:false,upload:'100M',download:'500M'},
       ppp: {enabled:false,mode:'bridge',port:'ether8',ports:[],vlanId:'',sharedBridgeConfirmed:false,service:'MIKROTIK-PPPOE',gateway:'10.20.0.1',network:'10.20.0.0/24',poolStart:'10.20.0.10',poolEnd:'10.20.0.250',usersText:''}
     };
@@ -158,7 +159,7 @@
     a.all.forEach(p=>{if(!validIf(p))errors.push('Tên cổng không hợp lệ: '+p);if(seen.has(p))errors.push('Trùng cổng: '+p);seen.add(p);});
     if(!validText(s.meta.identity,64)||!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(s.meta.identity)) errors.push('Tên RouterOS Identity chỉ dùng chữ, số, dấu - _ . (không khoảng trắng).');
     if(s.wan.length<1||s.wan.length>4)errors.push('Phiên bản đầu hỗ trợ từ 1 tới 4 WAN.');
-    const usedW=new Set(),allWanIPs=[];
+    const usedW=new Set(),allWanIPs=[],probeIPs=new Set();
     s.wan.forEach((w,i)=>{
       const label='WAN '+(i+1);
       if(!a.all.includes(w.port)) errors.push(label+': cổng '+w.port+' không có trên thiết bị.');
@@ -173,6 +174,12 @@
         if(w.ispConfirmed!==true)errors.push(label+': cần xác nhận với nhà mạng về chế độ PPPoE và VLAN ID trước khi sinh lệnh.');
       }
       if(w.type==='static') {const n=parseCIDR(w.ip);if(!n)errors.push(label+': IP tĩnh phải dạng 172.16.1.2/24.');else{allWanIPs.push({label,c:n});if(!usableGateway(n))errors.push(label+': IP WAN không được là network/broadcast.');if(!networkContains(n,w.gateway))errors.push(label+': gateway IP phải thuộc subnet IP tĩnh (trừ cấu hình gateway đặc biệt).');if(ipToInt(w.gateway)===n.ipNum)errors.push(label+': gateway IP không được trùng IP của router.');}}
+      if(w.probe){
+        const probe=ipToInt(w.probe);
+        if(probe===null||probe<0x01000000||(probe>>>24)===127||probe>=0xe0000000)errors.push(label+': đích giám sát phải là IPv4 unicast hợp lệ.');
+        if(probeIPs.has(probe))errors.push(label+': mỗi WAN cần một IP giám sát riêng.');
+        probeIPs.add(probe);
+      }
       if(parseSpeed(w.speed)===null) errors.push(label+': băng thông đăng ký phải dạng 250M, 1G hoặc 1000 Mbps (> 0).');
     });
     for(let i=0;i<allWanIPs.length;i++)for(let j=i+1;j<allWanIPs.length;j++)if(overlaps(allWanIPs[i].c,allWanIPs[j].c))errors.push('WAN tĩnh '+allWanIPs[i].label+' và '+allWanIPs[j].label+' trùng subnet.');
@@ -183,7 +190,7 @@
     if(!['pcc','failover'].includes(s.system.wanMode||'pcc'))errors.push('Chế độ WAN không hợp lệ.');
     if(s.wan.length>1&&s.system.wanMode!=='failover'&&pcc.total&&pcc.error>0.02)warnings.push('Tỷ lệ PCC chỉ gần đúng do giới hạn 24 phần; đường WAN có tốc độ rất nhỏ có thể nhận tỷ lệ kết nối cao hơn tỷ lệ băng thông.');
     if(s.wan.length>1&&s.wan.some(w=>w.type==='dhcp')) warnings.push('Multi-WAN DHCP dùng default-route-tables của RouterOS v7 mới; nên cập nhật RouterOS lên bản v7 stable gần nhất và kiểm tra các route sau khi chạy.');
-    if(s.wan.length>1){if(s.system.wanMode!=='failover')warnings.push('PCC chia theo kết nối, không cộng băng thông cho một phiên tải đơn.');warnings.push('Failover kiểm tra trạng thái PPP/gateway, không kiểm tra Internet end-to-end.');}
+    if(s.wan.length>1){if(s.system.wanMode!=='failover')warnings.push('PCC chia theo kết nối, không cộng băng thông cho một phiên tải đơn.');if(s.wan.some(w=>!w.probe))warnings.push('WAN bỏ trống IP giám sát chỉ kiểm tra trạng thái PPPoE hoặc gateway.');}
     if(!['all','custom'].includes(s.lan.portMode||'all'))errors.push('LAN: chế độ phân cổng không hợp lệ.');
     if(s.lan.portMode==='custom'){
       const selected=s.lan.selectedPorts||[];
@@ -245,6 +252,13 @@
     }
     for(let i=0;i<ranges.length;i++)for(let j=i+1;j<ranges.length;j++)if(overlaps(ranges[i].c,ranges[j].c))errors.push('Chồng dải IP: '+ranges[i].name+' và '+ranges[j].name+'.');
     for(const w of allWanIPs) for(const r of ranges) if(overlaps(w.c,r.c))errors.push('WAN tĩnh '+w.label+' trùng subnet '+r.name+'.');
+    for(const [index,w] of s.wan.entries()){
+      if(!w.probe)continue;
+      const probe=ipToInt(w.probe);
+      if([...ranges,...allWanIPs].some(({c})=>probe!==null&&probe>=c.net&&probe<=c.broadcast)){
+        errors.push('WAN '+(index+1)+': IP giám sát phải nằm ngoài các subnet LAN và WAN tĩnh.');
+      }
+    }
     if(s.qos.enabled){if(!/^\d+(?:[kKmMgG])$/.test(s.qos.upload)||!/^\d+(?:[kKmMgG])$/.test(s.qos.download)||Number(s.qos.upload.match(/^\d+/)?.[0])===0||Number(s.qos.download.match(/^\d+/)?.[0])===0)errors.push('PCQ: nhập tốc độ tổng dạng 100M và 500M, lớn hơn 0.');
       if(s.ppp.enabled)warnings.push('PCQ tổng và PPPoE rate-limit động có thể tương tác; đo thực tế và hiệu chỉnh mức tối đa trên router.');
     }
@@ -322,16 +336,34 @@
       if(w.type==='static')add(1,'/ip address add address='+w.ip+' interface='+w.port+' comment='+q('WAN'+(i+1)));
     });
     wanInfo.forEach(({w,i,ifname})=>{
-      if(w.type==='dhcp'){
-        const tables=['main:'+String(i+1)];
-        if(policyRoutes)wanInfo.forEach(x=>tables.push(x.table+':'+String(x.i===i?1:2+i)));
-        add(1,'/ip dhcp-client add interface='+w.port+' add-default-route=yes use-peer-dns=no use-peer-ntp=no default-route-tables='+tables.join(',')+' check-gateway=ping disabled=no');
-      } else {
-        const gateway=w.type==='pppoe'?ifname:w.gateway;
-        const extra=w.type==='static'?' check-gateway=ping':'';
-        const policyGateway=w.type==='static'?gateway+'@main':gateway;
-        add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+gateway+' routing-table=main distance='+(i+1)+extra+' comment='+q('Main WAN'+(i+1)));
-        if(policyRoutes)wanInfo.forEach(x=>add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+policyGateway+' routing-table='+x.table+' distance='+(x.i===i?1:2+i)+extra+' comment='+q(x.table+' fallback WAN'+(i+1))));
+      const routes=[{table:'main',distance:i+1}];
+      if(policyRoutes)wanInfo.forEach(x=>routes.push({table:x.table,distance:x.i===i?1:2+i}));
+      const dhcp=w.type==='dhcp';
+      const client='/ip dhcp-client add interface='+w.port+' use-peer-dns=no use-peer-ntp=no disabled=no';
+      if(dhcp&&!w.probe){
+        add(1,client+' add-default-route=yes default-route-tables='+routes.map(x=>x.table+':'+x.distance).join(',')+' check-gateway=ping');
+        return;
+      }
+      const gateway=w.type==='pppoe'?ifname:w.gateway;
+      if(w.probe){
+        const probeComment='AUTO probe WAN'+(i+1);
+        const probeRoute='/ip route add dst-address='+w.probe+'/32 routing-table=main scope=10 target-scope=10 comment='+q(probeComment);
+        if(dhcp){
+          const where='[find where routing-table=main and comment='+q(probeComment)+']';
+          const leaseScript=':local studioRoute [/ip route find where routing-table=main and comment='+q(probeComment)+']; '+
+            ':if ($bound = 1) do={ :local studioGw ($"gateway-address" . "%'+w.port+'"); '+
+            ':if ([:len $studioRoute] = 0) do={ '+probeRoute+' gateway=$studioGw } else={ /ip route set $studioRoute gateway=$studioGw } '+
+            '} else={ /ip route remove '+where+' }';
+          add(1,client+' add-default-route=no script='+q(leaseScript));
+        }else{
+          add(1,probeRoute+' gateway='+gateway);
+        }
+      }
+      for(const {table,distance} of routes){
+        const nextHop=(w.probe||gateway)+(table!=='main'&&(w.probe||w.type==='static')?'@main':'');
+        const check=w.probe?' target-scope=11 check-gateway=ping':w.type==='static'?' check-gateway=ping':'';
+        add(1,'/ip route add dst-address=0.0.0.0/0 gateway='+nextHop+' routing-table='+table+' distance='+distance+check+
+          ' comment='+q((table==='main'?'Main WAN':table+' fallback WAN')+(i+1)));
       }
     });
     txt(2,'03 - LAN BRIDGE / DHCP / MANAGEMENT');

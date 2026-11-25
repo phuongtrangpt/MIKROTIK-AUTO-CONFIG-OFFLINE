@@ -1,0 +1,67 @@
+name: Publish signed V2 Windows preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: studio-v2-preview-publishing
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/develop/v2-tauri'
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      STUDIO_UPDATER_PUBLIC_KEY: ${{ vars.STUDIO_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify candidate Windows build and CHR results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $runs = gh run list --workflow v2-desktop-ci.yml --commit $env:GITHUB_SHA --status success --json databaseId | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or @($runs).Count -eq 0) { throw 'Windows and CHR CI must pass for this commit before publishing.' }
+          if (-not $env:STUDIO_UPDATER_PUBLIC_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Set the preview signing key and public key in repository settings.' }
+      - name: Build and sign Windows installer
+        shell: pwsh
+        run: |
+          @{bundle=@{createUpdaterArtifacts=$true}; plugins=@{updater=@{pubkey=$env:STUDIO_UPDATER_PUBLIC_KEY}}} |
+            ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding utf8NoBOM "$env:RUNNER_TEMP/studio-updater.json"
+          npx --yes --package @tauri-apps/cli@2 tauri build --bundles nsis --config "$env:RUNNER_TEMP/studio-updater.json"
+      - name: Publish preview installer and manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = 'v2-desktop-preview'
+          $config = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $signed = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if ($signed.Count -ne 1) { throw 'Expected one signed NSIS installer.' }
+          $setup = $signed[0]
+          $signature = (Get-Content ($setup.FullName + '.sig') -Raw).Trim()
+          if (-not $signature) { throw 'Missing updater signature.' }
+          $published = gh release view $tag --json tagName,isPrerelease,assets 2>$null | ConvertFrom-Json
+          if (-not $published) {
+            gh release create $tag --target $env:GITHUB_SHA --prerelease --latest=false --title 'MikroTik Studio v2 Desktop Preview' --notes 'Kênh thử nghiệm Tauri dành cho Windows.'
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to create preview release.' }
+          } elseif (-not $published.isPrerelease) {
+            throw 'Preview tag belongs to a regular release.'
+          }
+          if ($published.assets.name -contains $setup.Name) { throw 'This version is already present. Bump the application version before publishing a new build.' }
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$([Uri]::EscapeDataString($setup.Name))"
+          $manifest = @{
+            version = $config.version
+            platforms = @{ 'windows-x86_64' = @{ url = $url; signature = $signature } }
+          }
+          $manifestPath = Join-Path $env:RUNNER_TEMP 'latest.json'
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM $manifestPath
+          gh release upload $tag $setup.FullName ($setup.FullName + '.sig')
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload signed preview assets.' }
+          gh release upload $tag $manifestPath --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to publish update manifest.' }

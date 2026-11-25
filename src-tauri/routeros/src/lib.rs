@@ -282,6 +282,104 @@ pub fn subscribers(connection: &Connection) -> Result<Vec<Row>> {
     ])
 }
 
+#[derive(Deserialize, ZeroizeOnDrop)]
+pub struct Subscriber {
+    id: Option<String>,
+    name: String,
+    password: String,
+    profile: String,
+    comment: String,
+    disabled: bool,
+}
+
+fn valid_field(value: &str, max: usize) -> bool {
+    !value.is_empty() && value.len() <= max && !value.chars().any(char::is_control)
+}
+
+pub fn ppp_profiles(connection: &Connection) -> Result<Vec<String>> {
+    open(connection)?
+        .request(&["/ppp/profile/print", "=.proplist=name"])
+        .map(|rows| {
+            rows.into_iter()
+                .filter_map(|mut row| row.remove("name"))
+                .collect()
+        })
+}
+
+pub fn save_subscriber(connection: &Connection, subscriber: &Subscriber) -> Result<()> {
+    if !connection.tls {
+        return Err("Thay đổi thuê bao cần kết nối API-SSL.".into());
+    }
+    if !valid_field(&subscriber.name, 63)
+        || !valid_field(&subscriber.profile, 63)
+        || (!subscriber.comment.is_empty() && !valid_field(&subscriber.comment, 128))
+        || ((!subscriber.password.is_empty() || subscriber.id.is_none())
+            && !valid_field(&subscriber.password, 128))
+    {
+        return Err("Kiểm tra tên thuê bao, gói cước, ghi chú và mật khẩu.".into());
+    }
+    let mut router = open(connection)?;
+    let profile_query = format!("?name={}", subscriber.profile);
+    if router
+        .request(&["/ppp/profile/print", "=.proplist=.id", &profile_query])?
+        .len()
+        != 1
+    {
+        return Err("Gói cước PPPoE không tồn tại.".into());
+    }
+    let name = format!("=name={}", subscriber.name);
+    let profile = format!("=profile={}", subscriber.profile);
+    let comment = format!("=comment={}", subscriber.comment);
+    let disabled = if subscriber.disabled {
+        "=disabled=yes"
+    } else {
+        "=disabled=no"
+    };
+    let id_word;
+    let mut words = if let Some(id) = &subscriber.id {
+        if !id.strip_prefix('*').is_some_and(|hex| {
+            !hex.is_empty() && hex.len() <= 12 && hex.bytes().all(|b| b.is_ascii_hexdigit())
+        }) {
+            return Err("Mã thuê bao không hợp lệ.".into());
+        }
+        let id_query = format!("?.id={id}");
+        let existing = router.request(&[
+            "/ppp/secret/print",
+            "=.proplist=.id",
+            &id_query,
+            "?service=pppoe",
+            "?#&",
+        ])?;
+        if existing.first().and_then(|row| row.get(".id")) != Some(id) {
+            return Err("Thuê bao PPPoE đã thay đổi. Hãy làm mới danh sách.".into());
+        }
+        id_word = format!("=.id={id}");
+        vec![
+            "/ppp/secret/set",
+            &id_word,
+            &name,
+            &profile,
+            &comment,
+            disabled,
+        ]
+    } else {
+        vec![
+            "/ppp/secret/add",
+            "=service=pppoe",
+            &name,
+            &profile,
+            &comment,
+            disabled,
+        ]
+    };
+    let password = zeroize::Zeroizing::new(format!("=password={}", subscriber.password));
+    if !subscriber.password.is_empty() {
+        words.push(&password);
+    }
+    router.request(&words)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

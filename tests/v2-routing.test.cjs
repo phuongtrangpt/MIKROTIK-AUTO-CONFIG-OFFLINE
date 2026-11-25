@@ -53,3 +53,17 @@ test('remote WinBox sources and failover reply routing preserve selected access'
   s.system.remoteWinboxSources += ',bad-address';
   assert.ok(C.render(s).errors.length);
 });
+
+test('recursive probes are installed per WAN and DHCP follows the lease', () => {
+  const s = state(2, 'pcc');
+  Object.assign(s.wan[0], {type:'dhcp',probe:'1.1.1.1'});
+  Object.assign(s.wan[1], {type:'static',ip:'172.16.2.2/24',gateway:'172.16.2.1',probe:'9.9.9.9'});
+  const {script,errors} = C.render(s);
+  assert.deepEqual(errors,[]);
+  assert.match(script,/interface=ether1[^\r\n]+add-default-route=no script=/);
+  assert.ok(script.includes(String.raw`\$\"gateway-address\" . \"%ether1\"`));
+  assert.match(script,/dst-address=9\.9\.9\.9\/32 routing-table=main scope=10 target-scope=10/);
+  assert.match(script,/gateway=1\.1\.1\.1@main routing-table=rt_WAN1 distance=1 target-scope=11 check-gateway=ping/);
+  s.wan[1].probe = '1.1.1.1';
+  assert.match(C.render(s).errors.join(' '),/mỗi WAN/);
+});

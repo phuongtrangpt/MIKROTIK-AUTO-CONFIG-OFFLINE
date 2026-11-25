@@ -64,3 +64,10 @@
 [data-theme="dark"] :is(.hint,.section-sub,.wizard-welcome>p,.checkrow small,.footer-note,.update-panel .note){color:var(--muted)}
 [data-theme="dark"] .callout.warn{background:#352b1c;border-color:#765934;color:#ffe2ad}
 [data-theme="dark"] .btn-primary{background:#2861d0;color:white}
+.studio-dialog fieldset{margin:14px 0;padding:10px 14px;border:1px solid var(--line);border-radius:10px;min-width:0}
+.studio-dialog legend{color:var(--muted);padding:0 6px}
+#studioVpnOutput button{align-self:start}
+#studioRouterResult li{padding:7px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+#studioUpdateProgress{width:100%;margin:0 0 10px}
+[data-theme="dark"] :is(.wan-card,.badge-lite,.summary-panel,.update-panel .note){background:var(--panel);border-color:var(--line);color:var(--ink)}
+[data-theme="dark"] :is(.card-head,.summary-title,.summary-row,.badge-lite,.eyebrow,.welcome-kicker){color:var(--muted)}
