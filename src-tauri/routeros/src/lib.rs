@@ -1,4 +1,5 @@
 mod codec;
+pub mod project_vpn;
 
 use native_tls::{Certificate, Protocol, TlsConnector, TlsStream};
 use serde::{Deserialize, Serialize};

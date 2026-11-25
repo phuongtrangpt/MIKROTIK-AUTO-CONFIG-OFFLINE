@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod project_vpn;
 mod updates;
 
 use std::collections::BTreeMap;
@@ -56,6 +57,10 @@ fn main() {
             ppp_subscribers,
             ppp_profiles,
             ppp_save,
+            project_vpn::vpn_prepare,
+            project_vpn::vpn_script,
+            project_vpn::vpn_connect,
+            project_vpn::vpn_disconnect,
             updates::update_available,
             updates::update_check,
             updates::update_install

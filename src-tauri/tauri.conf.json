@@ -1,6 +1,6 @@
 {
   "productName": "MikroTik Auto Config Studio",
-  "version": "2.0.0-alpha.3",
+  "version": "2.0.0-alpha.4",
   "identifier": "vn.vietphuong.mikrotikstudio",
   "build": {
     "frontendDist": "../desktop-dist",

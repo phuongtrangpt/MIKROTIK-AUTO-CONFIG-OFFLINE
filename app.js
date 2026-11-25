@@ -171,6 +171,7 @@ function outputPage(){const result=C.render(s),ok=!result.errors.length;
  html+=`<div class="callout warn" style="margin-top:16px"><b>Kiểm tra cú pháp trước khi áp dụng:</b> Trên RouterOS 7.16+ có thể tải file .RSC lên router lab rồi chạy <code>import file-name=ten_file.rsc verbose=yes dry-run=yes</code>. Đây chỉ là kiểm thử cú pháp, vẫn cần kiểm tra trên thiết bị thật và không chạy lặp cấu hình.</div>`;
  html+=`<div class="soft-panel" style="margin-top:20px"><h3 class="subhead">Kiểm tra trên MikroTik sau khi dán script</h3><p class="helper">Sao chép các lệnh <b>chỉ đọc</b> để xem kết nối PPPoE, route, DHCP, VLAN, firewall, PCQ và các phiên khách hàng khi thử nghiệm lab.</p><button type="button" class="btn btn-outline btn-small" data-action="copy-diagnostics">▣ Sao chép lệnh kiểm tra (chỉ đọc)</button></div>`;
  html+=`<hr class="rule"><h2 class="section-title">Lưu / mở mẫu khách hàng</h2><p class="section-sub">Lưu cấu hình để chỉnh sửa lần sau. Mẫu JSON lưu cấu hình WAN và LAN. Nhập lại mật khẩu WAN và danh sách tài khoản PPPoE khi cần sinh lệnh.</p><div class="btn-row" style="margin-top:14px"><button class="btn btn-outline" data-action="save-json">↓ Lưu mẫu .JSON</button><button class="btn btn-red" data-action="reset-project">Tạo cấu hình mới</button></div>`;
+ if(window.MTDesktop?.finish)html+='<div class="btn-row"><button class="btn btn-primary" type="button" data-action="finish-remote">Lưu dự án và thiết lập truy cập</button></div>';
  return html;
 }
 function renderStep(){
@@ -198,7 +199,7 @@ function renderStep(){
 }
 function advance(){
  if(!started){started=true;step=0;phase='form';renderStep();return;}
- if(step===7){toast('Đã hoàn tất quy trình. Có thể xuất file tổng dùng cho router mới.');return;}
+ if(step===7){if(window.MTDesktop?.finish)window.MTDesktop.finish();else toast('Đã hoàn tất quy trình. Có thể xuất file tổng dùng cho router mới.');return;}
  if(phase==='form'){
    const errs=errorsForStage(step);
    if(errs.length){toast('Còn '+errs.length+' lỗi ở bước này. Hãy sửa trước khi xem code.');renderStep();return;}
@@ -298,6 +299,7 @@ function eventClick(e){const nav=e.target.closest('[data-step]');if(nav){const t
  if(action==='toggle-secrets'){showSecrets=!showSecrets;renderStep();return;}
  if(action==='reset-project'){if(confirm('Xóa toàn bộ thông tin đang nhập? (Không thể khôi phục nếu chưa lưu mẫu.)')){s=C.defaultState();step=0;furthest=0;started=false;phase='form';copiedSteps.clear();copiedScriptSnapshots.clear();changedAfterCopy=false;showSecrets=false;renderStep();}return;}
  if(action==='copy-diagnostics'){copyScript(C.diagnostics(s));return;}
+ if(action==='finish-remote'){window.MTDesktop?.finish();return;}
  if(action==='save-json'){download(JSON.stringify(projectSnapshot(),null,2),filename('json'),'application/json;charset=utf-8');toast('Đã tạo mẫu JSON.');return;}
  if(['download-rsc','download-txt','copy'].includes(action)) {const r=C.render(s);if(r.errors.length){toast('Cấu hình có lỗi; chưa thể xuất script.');renderStep();return;}if(!safeConfirm())return;
  if(action==='copy')copyScript(r.script);else{download(r.script,filename(action==='download-rsc'?'rsc':'txt'),'text/plain;charset=utf-8');toast('Đã tạo file '+(action==='download-rsc'?'.RSC':'.TXT')+'.');}return;}

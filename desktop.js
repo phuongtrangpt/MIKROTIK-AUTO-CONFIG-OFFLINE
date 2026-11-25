@@ -36,6 +36,56 @@ window.MTDesktop = {
         <div class="btn-row"><button class="btn btn-primary" id="studioProjectSave">Lưu cấu hình hiện tại</button></div>
         <ul id="studioProjectList"></ul>
       </section>
+      <section id="studioRemote" hidden>
+        <h2 id="studioRemoteTitle">Quản trị dự án</h2>
+        <p id="studioRemoteStatus" role="status"></p>
+        <div id="studioRemoteFinish" hidden>
+          <div class="field"><label for="studioRemoteName">Tên dự án</label><input id="studioRemoteName" maxlength="80" required></div>
+          <label class="checkrow"><input id="studioRemoteFetch" type="checkbox"> Chuẩn bị Fetch cho NetWatch</label>
+          <div id="studioRemoteFetchHelp" hidden>
+            <p class="hint">Dùng <code>/system/device-mode/print</code> để kiểm tra. Nếu Fetch đang tắt, chạy lệnh bên dưới khi ở cạnh router và xác nhận theo thông báo của RouterOS. Sau đó nhập script NetWatch riêng.</p>
+            <button class="btn btn-outline btn-small" id="studioRemoteFetchCopy" type="button">Sao chép lệnh bật Fetch</button>
+          </div>
+          <label class="checkrow"><input id="studioRemoteEnable" type="checkbox"> Thiết lập WireGuard để quản trị từ xa</label>
+        </div>
+        <form id="studioRemoteSetup" hidden>
+          <div class="studio-grid">
+            <div class="field"><label for="studioRemoteEndpoint">DNS MikroTik Cloud hoặc IP WAN</label><input id="studioRemoteEndpoint" required maxlength="254" placeholder="router.sn.mynetname.net"></div>
+            <div class="field"><label for="studioRemotePort">Cổng UDP WireGuard</label><input id="studioRemotePort" type="number" required value="51820" min="1" max="65535"></div>
+            <div class="field"><label for="studioRemoteWan">Interface WAN (tùy chọn)</label><input id="studioRemoteWan" maxlength="60" placeholder="Để trống nếu router có danh sách WAN"></div>
+            <div class="field"><label for="studioRemoteAddress">IP router trong đường hầm /30</label><input id="studioRemoteAddress" required></div>
+          </div>
+          <label class="checkrow"><input id="studioRemoteReuse" type="checkbox"> Giữ API-SSL đã cài trên router</label>
+          <div id="studioRemoteReuseOptions" class="studio-grid" hidden>
+            <div class="field"><label for="studioRemoteApiPort">Cổng API-SSL hiện tại</label><input id="studioRemoteApiPort" type="number" value="8729" min="1" max="65535"></div>
+            <div class="field"><label for="studioRemoteTlsName">Tên trên chứng chỉ hiện tại</label><input id="studioRemoteTlsName" maxlength="254"></div>
+            <div class="field"><label for="studioRemoteCa">CA PEM hiện tại (nếu dùng CA nội bộ)</label><textarea id="studioRemoteCa" maxlength="32768" rows="2"></textarea></div>
+          </div>
+          <p class="hint">Với router mới, áp dụng cấu hình Internet và firewall trước. Với router đang chạy, dùng WinBox để áp dụng phần bổ sung VPN một lần.</p>
+          <button class="btn btn-primary" type="submit">Tạo VPN và lưu dự án</button>
+        </form>
+        <button class="btn btn-primary" id="studioRemoteSaveOnly" type="button" hidden>Lưu dự án</button>
+        <div id="studioRemoteConnectPanel" hidden>
+          <p id="studioRemoteEndpointView"></p>
+          <details>
+            <summary>Cài VPN trên router lần đầu</summary>
+            <p id="studioRemoteApplyHint" class="hint"></p>
+            <button class="btn btn-outline" id="studioRemoteCopy" type="button">Sao chép lệnh cài VPN</button>
+            <p class="hint">Đoạn lệnh chứa khóa của router. Dán trực tiếp vào Terminal WinBox, giữ riêng cho dự án. Đợi dòng <code>Studio VPN ready</code>.</p>
+          </details>
+          <form id="studioRemoteConnect">
+            <div class="studio-grid">
+              <div class="field"><label for="studioRemoteUser">Tài khoản RouterOS</label><input id="studioRemoteUser" required maxlength="128" autocomplete="off"></div>
+              <div class="field"><label for="studioRemotePassword">Mật khẩu RouterOS</label><input id="studioRemotePassword" required type="password" maxlength="256" autocomplete="off"></div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" type="submit">Kết nối VPN</button>
+              <button class="btn btn-outline" id="studioRemoteDisconnect" type="button">Ngắt VPN</button>
+            </div>
+          </form>
+          <p class="hint">Dùng WireGuard for Windows. Windows có thể yêu cầu quyền quản trị để bật đường hầm.</p>
+        </div>
+      </section>
       <section id="studioWireGuard" hidden>
         <h2>Tạo cấu hình WireGuard</h2>
         <p class="hint">Chạy script sau cấu hình cơ sở. Với Remote Access và Hub, thiết bị ngoài kết nối vào WAN 1. Cấu hình chỉ cấp quyền đến các mạng nội bộ được chọn.</p>
@@ -56,7 +106,9 @@ window.MTDesktop = {
         <div class="field" id="studioVpnOutput" hidden><label for="studioVpnScript">Script RouterOS 7</label><textarea id="studioVpnScript" readonly rows="8"></textarea><button class="btn btn-outline" id="studioVpnDownload">Xuất .RSC</button></div>
       </section>
       <section id="studioRouter" hidden>
-        <h2>Kết nối RouterOS</h2>
+        <h2 id="studioRouterTitle">Kết nối RouterOS</h2>
+        <p id="studioManagedSummary" class="hint" hidden></p>
+        <button class="btn btn-outline btn-small" id="studioManagedBack" type="button" hidden>Quay lại kết nối VPN</button>
         <form id="studioRouterForm">
           <div class="studio-grid">
             <div class="field"><label for="studioHost">IP hoặc DNS MikroTik Cloud</label><input id="studioHost" required maxlength="254" placeholder="192.168.88.1 hoặc router.sn.mynetname.net" autocapitalize="none" spellcheck="false"></div>
@@ -131,6 +183,7 @@ window.MTDesktop = {
     function show(section) {
       byId('studioProjects').hidden = section !== 'projects';
       byId('studioRouter').hidden = section !== 'router';
+      byId('studioRemote').hidden = section !== 'remote';
       byId('studioWireGuard').hidden = section !== 'wireguard';
       if (!dialog.open) dialog.showModal();
     }
@@ -144,7 +197,11 @@ window.MTDesktop = {
         const open = document.createElement('button');
         open.className = 'btn btn-outline btn-small';
         open.textContent = 'Mở';
-        open.onclick = () => {
+        open.onclick = () => openRemote(record);
+        const edit = document.createElement('button');
+        edit.className = 'btn btn-outline btn-small';
+        edit.textContent = 'Sửa cấu hình';
+        edit.onclick = () => {
           if (!confirm('Mở dự án này sẽ thay nội dung đang chỉnh sửa. Tiếp tục?')) return;
           loadProject(record.data);
           dialog.close();
@@ -153,14 +210,15 @@ window.MTDesktop = {
         const remove = document.createElement('button');
         remove.className = 'btn btn-outline btn-small';
         remove.textContent = 'Xóa';
-        remove.onclick = () => {
+        remove.onclick = async () => {
           if (!confirm('Xóa dự án ' + record.data.meta.project + '?')) return;
           try {
+            if (record.remote) await invoke('vpn_disconnect', {id:record.remote.id,remove:true});
             saveProjects(projects().filter(project => project.id !== record.id));
             projectList();
-          } catch { toast('Không thể cập nhật danh sách dự án.'); }
+          } catch (error) { toast(String(error)); }
         };
-        item.append(name, open, remove);
+        item.append(name, open, edit, remove);
         list.append(item);
       }
     }
@@ -179,10 +237,179 @@ window.MTDesktop = {
       const snapshot = projectSnapshot();
       snapshot.data.meta.project = name;
       try {
-        saveProjects([{id, ...snapshot}, ...records.filter(record => record.id !== id)]);
+        saveProjects([{...sameName, id, ...snapshot}, ...records.filter(record => record.id !== id)]);
         projectList();
         toast('Đã lưu dự án ' + name);
       } catch { toast('Không thể lưu dự án trên máy.'); }
+    };
+
+    let remoteRecord;
+    let remoteWizard = false;
+    let remoteBusy = false;
+    let managed;
+    let managedRecord;
+    const remoteStatus = byId('studioRemoteStatus');
+    const remoteForm = byId('studioRemoteConnect');
+    const setupForm = byId('studioRemoteSetup');
+
+    function saveRemoteRecord(record) {
+      const existing = projects();
+      saveProjects([record, ...existing.filter(item => item.id !== record.id)]);
+    }
+
+    function nextTunnelAddress() {
+      const used = new Set(projects().map(record => record.remote?.routerIp));
+      const [b,c] = crypto.getRandomValues(new Uint8Array(2));
+      for (let i = 0; i < 16384; i++) {
+        const n = ((b * 64 + (c % 64)) + i) % 16384;
+        const ip = '10.241.' + Math.floor(n / 64) + '.' + (4*(n % 64)+1);
+        if (!used.has(ip)) return ip;
+      }
+      return '';
+    }
+
+    function openRemote(record, wizard = false) {
+      remoteRecord = record;
+      remoteWizard = wizard;
+      const remote = record.remote;
+      byId('studioRemoteTitle').textContent = wizard ? 'Hoàn tất dự án' : record.data.meta.project;
+      byId('studioRemoteFinish').hidden = !wizard;
+      byId('studioRemoteName').value = record.data.meta.project;
+      byId('studioRemoteFetch').checked = Boolean(record.netwatchFetch);
+      byId('studioRemoteFetchHelp').hidden = !record.netwatchFetch;
+      byId('studioRemoteEnable').checked = false;
+      byId('studioRemoteSaveOnly').hidden = !wizard;
+      setupForm.hidden = Boolean(remote) || wizard;
+      byId('studioRemoteConnectPanel').hidden = !remote || wizard;
+      remoteForm.reset();
+      byId('studioRemoteUser').value = record.routerUser || '';
+      setupForm.reset();
+      byId('studioRemoteReuseOptions').hidden = true;
+      byId('studioRemoteAddress').value = nextTunnelAddress();
+      remoteStatus.textContent = !remote && !wizard
+        ? 'Dự án cũ có thể thêm VPN một lần trên router đang chạy.'
+        : '';
+      if (remote) {
+        byId('studioRemoteEndpointView').textContent = remote.endpoint + ' · VPN ' + remote.routerIp;
+        byId('studioRemoteApplyHint').textContent = remote.tlsName
+          ? 'Trong IP → Services → api-ssl, nếu đã giới hạn nguồn, hãy thêm ' + remote.clientIp + '/32 vào danh sách hiện có. Giữ chứng chỉ và cổng đang dùng.'
+          : 'Đoạn lệnh tạo đường hầm và chứng chỉ quản trị riêng. API-SSL chỉ nhận IP của máy này trong VPN.';
+      }
+      show('remote');
+    }
+
+    const finish = () => {
+      const snapshot = projectSnapshot();
+      const name = snapshot.data.meta.project.trim();
+      const previous = projects().find(record => record.data.meta.project.toLowerCase() === name.toLowerCase());
+      openRemote({...previous, ...snapshot, id:previous?.id || crypto.randomUUID()}, true);
+    };
+    function snapshotOfRemote(record) {
+      if (!remoteWizard) return record;
+      const name = byId('studioRemoteName').value.trim();
+      if (!name) throw new Error('Nhập tên dự án.');
+      const other = projects().find(item => item.id !== record.id && item.data.meta.project.toLowerCase() === name.toLowerCase());
+      if (other) throw new Error('Tên dự án này đã tồn tại.');
+      return {...record, data:{...record.data,meta:{...record.data.meta,project:name}}, netwatchFetch:byId('studioRemoteFetch').checked};
+    }
+    byId('studioRemoteFetch').onchange = event => { byId('studioRemoteFetchHelp').hidden = !event.target.checked; };
+    byId('studioRemoteFetchCopy').onclick = () => copyScript('/system/device-mode/update fetch=yes\n');
+    byId('studioRemoteEnable').onchange = event => {
+      const selected = event.target.checked;
+      setupForm.hidden = Boolean(remoteRecord.remote) || !selected;
+      byId('studioRemoteConnectPanel').hidden = !remoteRecord.remote || !selected;
+      byId('studioRemoteSaveOnly').hidden = selected && !remoteRecord.remote;
+    };
+    byId('studioRemoteSaveOnly').onclick = () => {
+      try {
+        saveRemoteRecord(snapshotOfRemote(remoteRecord));
+        projectList();
+        show('projects');
+        toast('Đã lưu dự án.');
+      } catch (error) { remoteStatus.textContent = String(error.message || error); }
+    };
+    byId('studioRemoteReuse').onchange = event => { byId('studioRemoteReuseOptions').hidden = !event.target.checked; };
+    setupForm.onsubmit = async event => {
+      event.preventDefault();
+      if (remoteBusy) return;
+      remoteBusy = true;
+      const submit = event.submitter;
+      submit.disabled = true;
+      let newTunnel;
+      try {
+        const record = snapshotOfRemote(remoteRecord);
+        const input = id => byId('studioRemote'+id).value.trim();
+        const routerIp = input('Address');
+        if (projects().some(item => item.remote?.routerIp === routerIp)) throw new Error('Dải VPN đã được dùng trong dự án khác.');
+        const ip = window.MTCore.ipToInt(routerIp);
+        const sameNetwork = cidr => {
+          const network = window.MTCore.parseCIDR(cidr);
+          return network && ip >= network.net && ip <= network.broadcast;
+        };
+        if ([record.data.lan.gateway, ...record.data.vlans.map(vlan => vlan.gateway)].some(sameNetwork)) {
+          throw new Error('IP đường hầm trùng dải LAN hoặc VLAN trong dự án.');
+        }
+        remoteStatus.textContent = 'Đang tạo và mã hóa khóa WireGuard…';
+        newTunnel = await invoke('vpn_prepare', {options:{
+          endpoint:input('Endpoint'), port:Number(input('Port')), wan:input('Wan'), routerIp,
+          reuseSsl:byId('studioRemoteReuse').checked, apiPort:Number(input('ApiPort')),
+          tlsName:input('TlsName'),caPem:input('Ca')
+        }});
+        const updated = {...record, remote:newTunnel};
+        saveRemoteRecord(updated);
+        newTunnel = null;
+        openRemote(updated);
+        remoteStatus.textContent = 'Đã lưu dự án và khóa VPN trên máy này. Cài VPN trên router một lần để kết nối.';
+      } catch (error) {
+        if (newTunnel) await invoke('vpn_disconnect', {id:newTunnel.id,remove:true}).catch(() => {});
+        remoteStatus.textContent = String(error.message || error);
+      } finally {
+        remoteBusy = false;
+        submit.disabled = false;
+      }
+    };
+    byId('studioRemoteCopy').onclick = async () => {
+      if (!confirm('Đoạn lệnh có khóa riêng của router. Chỉ dán vào Terminal WinBox của dự án này.')) return;
+      try { copyScript(await invoke('vpn_script', {id:remoteRecord.remote.id})); }
+      catch (error) { remoteStatus.textContent = String(error); }
+    };
+    byId('studioRemoteDisconnect').onclick = async event => {
+      if (remoteBusy) return;
+      remoteBusy = true;
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await invoke('vpn_disconnect', {id:remoteRecord.remote.id,remove:false});
+        remoteStatus.textContent = 'Đã ngắt VPN.';
+      } catch (error) { remoteStatus.textContent = String(error); }
+      finally { remoteBusy = false; button.disabled = false; }
+    };
+    remoteForm.onsubmit = async event => {
+      event.preventDefault();
+      if (remoteBusy) return;
+      remoteBusy = true;
+      const submit = event.submitter;
+      const record = remoteRecord;
+      const remote = record.remote;
+      const connection = {
+        host:remote.routerIp,port:remote.apiPort,tls:true,tlsName:remote.tlsName,caPem:remote.caPem,
+        username:byId('studioRemoteUser').value.trim(),password:byId('studioRemotePassword').value
+      };
+      submit.disabled = true;
+      try {
+        remoteStatus.textContent = 'Đang khởi động WireGuard…';
+        await invoke('vpn_connect', {id:remote.id});
+        remoteStatus.textContent = 'Đang xác minh router qua API-SSL trong VPN…';
+        const router = await invoke('router_info', {connection});
+        const updated = {...record,routerUser:connection.username};
+        saveRemoteRecord(updated);
+        if (dialog.open && !byId('studioRemote').hidden && remoteRecord.id === record.id) openManaged(updated, connection, router);
+      } catch (error) { remoteStatus.textContent = String(error); }
+      finally {
+        remoteBusy = false;
+        submit.disabled = false;
+        byId('studioRemotePassword').value = '';
+      }
     };
 
     const vpnPeers = byId('studioVpnPeers');
@@ -245,7 +472,49 @@ window.MTDesktop = {
     };
     byId('studioVpnDownload').onclick = () => download(byId('studioVpnScript').value,'WireGuard_RouterOS7.rsc','text/plain;charset=utf-8');
 
-    button('desktopRouter', 'RouterOS').onclick = () => show('router');
+    function setManaged(connection) {
+      managed = connection;
+      const isManaged = Boolean(connection);
+      const fields = ['studioHost','studioPort','studioUser','studioPassword','studioTlsName','studioCa'];
+      for (const id of fields) byId(id).readOnly = isManaged;
+      byId('studioTls').disabled = isManaged;
+      byId('studioTlsOptions').hidden = isManaged || !byId('studioTls').checked;
+      byId('studioCaFile').disabled = isManaged;
+      byId('studioManagedSummary').hidden = !isManaged;
+      byId('studioManagedBack').hidden = !isManaged;
+      byId('studioRouterStatus').textContent = '';
+      byId('studioRouterResult').replaceChildren();
+      byId('studioPppEditor').hidden = true;
+      byId('studioPassword').value = '';
+      loadedRouter = undefined;
+    }
+    function openManaged(record, connection, router) {
+      managedRecord = record;
+      setManaged(connection);
+      byId('studioRouterTitle').textContent = 'Quản trị · ' + record.data.meta.project;
+      byId('studioManagedSummary').textContent = 'VPN đã kết nối · ' + router.identity + ' · RouterOS ' + router.version;
+      byId('studioHost').value = connection.host;
+      byId('studioPort').value = connection.port;
+      byId('studioUser').value = connection.username;
+      byId('studioTls').checked = true;
+      byId('studioPlainHint').hidden = true;
+      byId('studioBackupOptions').hidden = false;
+      show('router');
+    }
+    byId('studioManagedBack').onclick = () => {
+      setManaged(undefined);
+      if (managedRecord) openRemote(managedRecord);
+    };
+    button('desktopRouter', 'RouterOS').onclick = () => {
+      const wasManaged = byId('studioHost').readOnly;
+      setManaged(undefined);
+      if (wasManaged) {
+        byId('studioRouterForm').reset();
+        byId('studioTls').onchange();
+      }
+      byId('studioRouterTitle').textContent = 'Kết nối RouterOS';
+      show('router');
+    };
     byId('studioRollbackArm').onclick = () => {
       const random = crypto.getRandomValues(new Uint8Array(8));
       const token = Array.from(random, byte => byte.toString(16).padStart(2,'0')).join('');
@@ -302,7 +571,7 @@ window.MTDesktop = {
       if (controls.some(control => control.disabled)) return;
       if (!tls.checked && !confirm('API thường truyền mật khẩu dạng rõ. Chỉ tiếp tục trên mạng quản trị tin cậy.')) return;
       const val = id => byId(id).value;
-      const connection = {
+      const connection = managed || {
         host: val('studioHost').trim(), port: Number(val('studioPort')), username: val('studioUser'),
         password: val('studioPassword'), tls: tls.checked, tlsName: val('studioTlsName'), caPem: val('studioCa')
       };
@@ -371,7 +640,8 @@ window.MTDesktop = {
       }
     };
     function clearCredentials() {
-      for (const id of ['studioPassword','studioBackupPassword','studioPppPassword']) byId(id).value = '';
+      managed = undefined;
+      for (const id of ['studioRemotePassword','studioPassword','studioBackupPassword','studioPppPassword']) byId(id).value = '';
     }
     dialog.querySelector('.studio-close').addEventListener('submit', clearCredentials);
     dialog.addEventListener('close', clearCredentials);
@@ -438,5 +708,6 @@ window.MTDesktop = {
       update.onclick = () => checkUpdate(false);
       checkUpdate(true);
     }).catch(() => {});
+    this.finish = finish;
   }
 };

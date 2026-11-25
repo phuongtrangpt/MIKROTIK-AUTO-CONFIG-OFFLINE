@@ -19,9 +19,15 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
         page.on('dialog',lambda dialog:dialog.accept())
         page.add_init_script("""window.__TAURI__ = {core:{invoke:async (cmd,args)=>{
           if(cmd==='update_available') return true;
-          if(cmd==='update_check') return '2.0.0-alpha.4';
+          if(cmd==='update_check') return '2.0.0-alpha.5';
           if(cmd==='update_install'){ args.progress.onmessage({downloaded:10,total:10}); return; }
           if(cmd==='router_info' && args.connection.host==='router.sn.mynetname.net' && args.connection.tlsName==='' && args.connection.caPem.includes('BEGIN CERTIFICATE')) return {identity:'LAB-RB5009',version:'7.21.5',board:'CHR',uptime:'1h'};
+          if(cmd==='vpn_prepare') return {id:'0123456789abcdef',endpoint:args.options.endpoint,routerIp:args.options.routerIp,
+            clientIp:'10.241.0.2',port:args.options.port,apiPort:8729,tlsName:'',caPem:'public CA'};
+          if(cmd==='vpn_script') return ':put "Studio VPN ready"';
+          if(cmd==='vpn_connect' && args.id==='0123456789abcdef') return;
+          if(cmd==='router_info' && args.connection.host.startsWith('10.241.') && args.connection.tls===true && args.connection.caPem==='public CA')
+            return {identity:'VPN LAB',version:'7.21.5',board:'CHR',uptime:'1h'};
           if(cmd==='ppp_subscribers') return [{'.id':'*1',name:'lab',profile:'lab-plan',disabled:'false'}];
           if(cmd==='ppp_profiles') return ['lab-plan'];
           if(cmd==='ppp_save') return;
@@ -29,7 +35,7 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
           throw new Error(cmd);
         },Channel:class {}}};""")
         page.goto(f'http://127.0.0.1:{server.server_port}/')
-        assert page.locator('#sideVer').inner_text()=='2.0.0-alpha.3'
+        assert page.locator('#sideVer').inner_text()=='2.0.0-alpha.4'
         page.locator('#desktopTheme').click()
         assert page.locator('html').get_attribute('data-theme')=='dark'
         page.locator('#studioUpdateClose').click()
@@ -86,14 +92,36 @@ with ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,direct
         page.locator('#desktopProjects').click()
         page.locator('#studioProjectName').fill('Khách hàng B')
         page.locator('#studioProjectSave').click()
-        page.locator('#studioProjectList li').filter(has_text='Khách hàng A').get_by_role('button',name='Mở').click()
+        page.locator('#studioProjectList li').filter(has_text='Khách hàng A').get_by_role('button',name='Sửa cấu hình').click()
         page.locator('#desktopVpn').click()
         assert page.locator('#studioVpnIp').input_value()==''
         page.locator('.studio-close button').click()
         page.locator('#desktopProjects').click()
-        page.locator('#studioProjectList li').filter(has_text='Khách hàng B').get_by_role('button',name='Mở').click()
+        page.locator('#studioProjectList li').filter(has_text='Khách hàng B').get_by_role('button',name='Sửa cấu hình').click()
         page.locator('#desktopVpn').click()
         assert page.locator('#studioVpnIp').input_value()=='10.80.0.1/24'
+        page.locator('.studio-close button').click()
+        page.evaluate("window.MTDesktop.finish()")
+        page.locator('#studioRemoteName').fill('Dự án VPN')
+        page.locator('#studioRemoteFetch').check()
+        page.locator('#studioRemoteFetchCopy').click()
+        page.wait_for_function("navigator.clipboard.readText().then(text=>text.includes('device-mode/update fetch=yes'))")
+        page.locator('#studioRemoteEnable').check()
+        page.locator('#studioRemoteEndpoint').fill('vpn.sn.mynetname.net')
+        page.get_by_role('button',name='Tạo VPN và lưu dự án').click()
+        page.locator('#studioRemoteEndpointView').wait_for(state='visible')
+        assert 'vpn.sn.mynetname.net' in page.locator('#studioRemoteEndpointView').inner_text()
+        page.locator('.studio-close button').click()
+        page.locator('#desktopProjects').click()
+        page.locator('#studioProjectList li').filter(has_text='Dự án VPN').get_by_role('button',name='Mở',exact=True).click()
+        page.locator('#studioRemoteUser').fill('operator')
+        page.locator('#studioRemotePassword').fill('never-store-this-test-password')
+        page.get_by_role('button',name='Kết nối VPN',exact=True).click()
+        page.locator('#studioManagedSummary').wait_for(state='visible')
+        assert 'VPN LAB' in page.locator('#studioManagedSummary').inner_text()
+        page.get_by_role('button',name='Xem thuê bao PPPoE').click()
+        page.get_by_role('button',name='Sửa',exact=True).wait_for(state='visible')
+        assert page.evaluate("!JSON.stringify(localStorage).includes('never-store-this-test-password')")
         page.locator('.studio-close button').click()
         page.locator('#updateCheckButton').click()
         page.locator('#studioUpdateInstall').click()

@@ -1,6 +1,6 @@
 # MikroTik Auto Config Studio — Offline (v1.5.0)
 
-## Desktop v2.0.0-alpha.3
+## Desktop v2.0.0-alpha.4
 
 Nhánh `develop/v2-tauri` xây dựng ứng dụng Windows bằng Tauri 2 và Rust. Bộ cài thử nghiệm nằm trong mục **Artifacts** của workflow [V2 desktop CI](https://github.com/phuongtrangpt/MIKROTIK-AUTO-CONFIG-OFFLINE/actions/workflows/v2-desktop-ci.yml). Trình hướng dẫn trên `index.html` vẫn chạy được offline trên trình duyệt. Các tính năng desktop xuất hiện trong bộ cài.
 
@@ -9,6 +9,20 @@ Nhánh `develop/v2-tauri` xây dựng ứng dụng Windows bằng Tauri 2 và Ru
 - **Áp dụng và khôi phục** xuất .RSC cho RouterOS 7 trống. Có thể kiểm tra bằng `/import file-name=<ten.rsc> verbose=yes dry-run`. Khi chỉnh router đang chạy, dùng Safe Mode trong WinBox hoặc Ctrl+X trong Terminal, thực hiện theo từng nhóm lệnh nhỏ và kiểm tra bằng phiên quản trị thứ hai trước khi xác nhận. Mục **Hẹn tự khôi phục** tạo lệnh đặt lịch trên router. Xác nhận bằng cùng tài khoản sau khi thử phiên quản trị mới để giữ cấu hình. Khi hết thời hạn mà chưa xác nhận, router khôi phục bản sao lưu tạm và khởi động lại. Dùng tính năng khi router tiếp tục chạy. Để phục hồi thủ công, mở **Files** trên đúng router gốc và chọn **Restore** với mật khẩu sao lưu.
 - **WAN** mỗi đường có thể khai báo một IP giám sát riêng. Với DHCP + giám sát, script cập nhật route /32 khi địa chỉ thuê thay đổi. Chọn đích phản hồi ICMP ổn định qua đúng nhà mạng. WinBox từ WAN là lựa chọn riêng, có thể giới hạn theo IP/CIDR nguồn.
 - **WireGuard** xuất cấu hình RouterOS cho Remote Access, Hub hoặc Site-to-Site. Chạy script sau cấu hình cơ sở. Remote Access và Hub nghe trên WAN 1. Điền public key của các peer vào ứng dụng, rồi lấy public key của router bằng `/interface wireguard print` để cấu hình máy khách hoặc chi nhánh. Cấu hình chi nhánh dạng Site-to-Site đặt endpoint là IP hoặc DNS của Hub và dùng IP VPN cùng subnet.
+
+### Quản trị dự án qua WireGuard
+
+Cài [WireGuard for Windows](https://www.wireguard.com/install/) trên máy quản trị. Studio dùng dịch vụ WireGuard của Windows và có thể yêu cầu chấp thuận UAC khi kết nối hoặc ngắt VPN.
+
+**Router mới.** Áp dụng cấu hình cơ sở của wizard để router có Internet và firewall. Bấm **Hoàn tất**. Nếu đồng bộ NetWatch, chọn **Chuẩn bị Fetch cho NetWatch**. Nếu cần sửa router từ xa, chọn **Thiết lập WireGuard**, nhập tên trong **IP → Cloud → DNS Name** hoặc IP WAN. Nếu chưa có tên, bật DDNS tại router sau khi có Internet để lấy DNS Name. Studio chọn một địa chỉ VPN /30 cho dự án. Kiểm tra dải đó còn trống trên router trước khi áp dụng. Cổng mặc định là UDP 51820.
+
+**Router đang chạy / dự án đã lưu.** Vào **Dự án → Mở → Tạo VPN và lưu dự án**. Để trống interface WAN nếu router có danh sách WAN phù hợp. Với router không có danh sách này, điền tên interface thật nhận lưu lượng Internet, chẳng hạn `pppoe-out1`. Nếu đang sử dụng API-SSL, bật **Giữ API-SSL đã cài trên router**, dùng cổng, tên chứng chỉ và CA phù hợp. Nếu dịch vụ hiện giới hạn IP nguồn, thêm IP máy VPN /32 được Studio hiển thị vào danh sách hiện tại. Dùng Safe Mode khi bổ sung VPN trên router đang phục vụ.
+
+**Cài và sử dụng.** Chọn **Sao chép lệnh cài VPN**, dán vào Terminal trên đúng router một lần và đợi `Studio VPN ready`. Lệnh có khóa riêng của router. Giữ đoạn lệnh trong phạm vi thiết lập. Sau đó chỉ cần **Dự án → Mở → Kết nối VPN** và nhập mật khẩu RouterOS. Khi router được xác minh qua API-SSL, Studio chuyển sang cửa sổ quản trị. Đường hầm chỉ định tuyến tới IP VPN của router. Chế độ tạo chứng chỉ mới giới hạn dịch vụ API-SSL vào IP máy quản trị trong VPN. Nếu router sau NAT, chuyển UDP của WireGuard tại thiết bị phía ngoài. Với CGNAT cần một đường VPN có relay hoặc hub đã truy cập được từ Internet.
+
+Studio lưu DNS, cổng và chứng chỉ CA công khai trong hồ sơ. Khóa VPN được mã hóa bằng Windows DPAPI trên máy tạo dự án. Mật khẩu RouterOS chỉ dùng cho phiên. Muốn giữ đường hầm nhưng đổi máy quản trị, cần cấp quyền peer mới cho máy đó.
+
+**Fetch cho NetWatch.** Kiểm tra `/system/device-mode/print`. Nếu Fetch đang tắt, chạy `/system/device-mode/update fetch=yes` khi ở cạnh router và thực hiện bước xác nhận vật lý mà RouterOS yêu cầu. Sau đó cài script thu thập từ NetWatch riêng. Tùy chọn này chuẩn bị khả năng chạy Fetch cho script giám sát.
 
 ### Kết nối từ xa bằng MikroTik Cloud và API-SSL
 
