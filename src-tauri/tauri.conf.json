@@ -1,0 +1,30 @@
+{
+  "productName": "MikroTik Auto Config Studio",
+  "version": "2.0.0-alpha.1",
+  "identifier": "vn.vietphuong.mikrotikstudio",
+  "build": {
+    "frontendDist": "../desktop-dist",
+    "beforeBuildCommand": "node scripts/prepare-desktop.cjs",
+    "beforeDevCommand": "node scripts/prepare-desktop.cjs"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "MikroTik Auto Config Studio",
+        "width": 1280,
+        "height": 850,
+        "minWidth": 900,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ]
+  }
+}
